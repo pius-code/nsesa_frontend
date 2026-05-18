@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:localhost)",
+      "Bash(pnpm add *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s http://localhost:8080/openapi.json)",
+      "Bash(python -c \"import sys,json; spec=json.load\\(sys.stdin\\); [print\\(k, json.dumps\\(v, indent=2\\)\\) for k,v in spec['paths'].items\\(\\)]\")"
+    ]
+  }
+}
