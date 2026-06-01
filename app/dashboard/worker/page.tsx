@@ -6,5 +6,5 @@ export default async function WorkerDashboard() {
   const session = await auth()
   if (!session) redirect("/login")
 
-  return <TransactionForm workerName={session.user.worker_name} />
+  return <TransactionForm workerName={session.user.worker_name} workerId={session.user.worker_id} />
 }

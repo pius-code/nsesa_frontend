@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { CheckCircle2, Loader2, Package, Plus } from "lucide-react"
+import { CheckCircle2, Loader2, Package, Plus, Pencil, Check, X } from "lucide-react"
 import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,7 +38,20 @@ export default function InventoryPage() {
   const [success, setSuccess] = useState(false)
   const [showForm, setShowForm] = useState(false)
 
-  const mutation = useMutation({
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editQty, setEditQty] = useState("")
+
+  function startEdit(item: InventoryItem) {
+    setEditingId(item._id)
+    setEditQty(String(item.amount_available))
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditQty("")
+  }
+
+  const addMutation = useMutation({
     mutationFn: async () => {
       const { data } = await api.post("/api/v1/add_to_inventory", {
         product_name: productName.trim(),
@@ -58,9 +71,22 @@ export default function InventoryPage() {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.patch(`/api/v1/inventory/update_stock/${id}`, {
+        amount_available: parseInt(editQty),
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      cancelEdit()
+    },
+  })
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    mutation.mutate()
+    addMutation.mutate()
   }
 
   const LOW_STOCK_THRESHOLD = 3
@@ -95,7 +121,7 @@ export default function InventoryPage() {
         >
           <p className="text-sm font-semibold text-zinc-700">New Product</p>
 
-          {mutation.isError && (
+          {addMutation.isError && (
             <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 text-red-600 text-sm">
               Failed to add product. Please try again.
             </div>
@@ -147,8 +173,8 @@ export default function InventoryPage() {
           </div>
 
           <div className="flex gap-3 pt-1">
-            <Button type="submit" disabled={mutation.isPending} className="flex-1">
-              {mutation.isPending ? (
+            <Button type="submit" disabled={addMutation.isPending} className="flex-1">
+              {addMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Saving…
@@ -191,11 +217,14 @@ export default function InventoryPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">Price</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">In Stock</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {inventory.map((item) => {
                   const lowStock = item.amount_available < LOW_STOCK_THRESHOLD
+                  const isEditing = editingId === item._id
+                  const isSaving = updateMutation.isPending && editingId === item._id
                   return (
                     <tr key={item._id} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-4 py-3 text-sm font-medium text-zinc-900">{item.product_name}</td>
@@ -203,12 +232,20 @@ export default function InventoryPage() {
                         GH₵{item.product_price.toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className={cn(
-                          "text-sm font-bold",
-                          lowStock ? "text-red-600" : "text-zinc-800"
-                        )}>
-                          {item.amount_available}
-                        </span>
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editQty}
+                            onChange={(e) => setEditQty(e.target.value)}
+                            className="w-24 h-8 text-center ml-auto"
+                            autoFocus
+                          />
+                        ) : (
+                          <span className={cn("text-sm font-bold", lowStock ? "text-red-600" : "text-zinc-800")}>
+                            {item.amount_available}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {lowStock ? (
@@ -225,6 +262,35 @@ export default function InventoryPage() {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => updateMutation.mutate(item._id)}
+                              disabled={isSaving || editQty === ""}
+                              className="p-1.5 rounded-md text-green-600 hover:bg-green-50 disabled:opacity-40 transition-colors"
+                            >
+                              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              disabled={isSaving}
+                              className="p-1.5 rounded-md text-zinc-400 hover:bg-zinc-100 disabled:opacity-40 transition-colors"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => startEdit(item)}
+                              className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
@@ -236,22 +302,61 @@ export default function InventoryPage() {
           <div className="flex md:hidden flex-col gap-3">
             {inventory.map((item) => {
               const lowStock = item.amount_available < LOW_STOCK_THRESHOLD
+              const isEditing = editingId === item._id
+              const isSaving = updateMutation.isPending && editingId === item._id
               return (
-                <div key={item._id} className="bg-white rounded-xl border border-zinc-200 px-4 py-4 flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-zinc-900 truncate">{item.product_name}</p>
-                    <p className="text-sm text-zinc-500 mt-0.5">GH₵{item.product_price.toFixed(2)}</p>
+                <div key={item._id} className="bg-white rounded-xl border border-zinc-200 px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-zinc-900 truncate">{item.product_name}</p>
+                      <p className="text-sm text-zinc-500 mt-0.5">GH₵{item.product_price.toFixed(2)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <span className={cn("text-lg font-bold", lowStock ? "text-red-600" : "text-zinc-800")}>
+                        {item.amount_available}
+                      </span>
+                      {lowStock ? (
+                        <span className="text-xs font-semibold text-red-600 bg-red-100 rounded-full px-2 py-0.5">Low stock</span>
+                      ) : (
+                        <span className="text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2 py-0.5">Available</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={cn("text-lg font-bold", lowStock ? "text-red-600" : "text-zinc-800")}>
-                      {item.amount_available}
-                    </span>
-                    {lowStock ? (
-                      <span className="text-xs font-semibold text-red-600 bg-red-100 rounded-full px-2 py-0.5">Low stock</span>
-                    ) : (
-                      <span className="text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2 py-0.5">Available</span>
-                    )}
-                  </div>
+
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-zinc-100">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editQty}
+                        onChange={(e) => setEditQty(e.target.value)}
+                        className="h-9 text-center flex-1"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => updateMutation.mutate(item._id)}
+                        disabled={isSaving || editQty === ""}
+                        className="p-2 rounded-lg text-white bg-green-600 hover:bg-green-700 disabled:opacity-40 transition-colors"
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        disabled={isSaving}
+                        className="p-2 rounded-lg text-zinc-500 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEdit(item)}
+                      className="mt-3 pt-3 border-t border-zinc-100 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Update stock
+                    </button>
+                  )}
                 </div>
               )
             })}

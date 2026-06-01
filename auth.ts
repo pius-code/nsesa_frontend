@@ -30,6 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             name: data.worker.worker_name,
             email: data.worker.worker_email,
             accessToken: data.access_token,
+            worker_id: data.worker.id,
             worker_role: data.worker.worker_role,
             worker_name: data.worker.worker_name,
             worker_shop_name: data.worker.worker_shop_name,
@@ -44,6 +45,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     jwt({ token, user }) {
       if (user) {
         token.accessToken = user.accessToken;
+        token.worker_id = user.worker_id;
         token.worker_role = user.worker_role;
         token.worker_name = user.worker_name;
         token.worker_shop_name = user.worker_shop_name;
@@ -52,6 +54,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session({ session, token }) {
       session.accessToken = token.accessToken as string;
+      session.user.worker_id = token.worker_id as string;
       session.user.worker_role = token.worker_role as string;
       session.user.worker_name = token.worker_name as string;
       session.user.worker_shop_name = token.worker_shop_name as string;

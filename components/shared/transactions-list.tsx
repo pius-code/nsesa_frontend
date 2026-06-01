@@ -115,10 +115,10 @@ function TransactionRow({ tx }: { tx: Transaction }) {
         <td className="px-4 py-3">
           <p className="text-sm font-medium text-zinc-900">
             {tx.customer_name}
+            {tx.customer_number && (
+              <span className="ml-1.5 text-xs font-normal text-zinc-400">· {tx.customer_number}</span>
+            )}
           </p>
-          {tx.customer_number && (
-            <p className="text-xs text-zinc-400">{tx.customer_number}</p>
-          )}
         </td>
         <td className="px-4 py-3 text-sm text-zinc-600 text-center">
           {tx.items.length}
@@ -162,6 +162,9 @@ function TransactionCard({ tx }: { tx: Transaction }) {
           <div className="flex-1 min-w-0">
             <p className="font-medium text-zinc-900 truncate">
               {tx.customer_name}
+              {tx.customer_number && (
+                <span className="ml-1.5 text-xs font-normal text-zinc-400">· {tx.customer_number}</span>
+              )}
             </p>
             <p className="text-xs text-zinc-400 mt-0.5">
               {formatDate(tx.created_at)}
