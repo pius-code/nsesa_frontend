@@ -271,7 +271,7 @@ export default function ReceiptPage() {
       </div>
 
       <p className="mt-3 text-xs text-zinc-400 print:hidden">
-        Print · Share link · or Save as image
+        Managed by Father's Joy Pay Services
       </p>
     </div>
   );
