@@ -8,7 +8,6 @@ import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 interface Worker {
@@ -142,6 +141,9 @@ export default function WorkersPage() {
               >
                 <option value="worker">Worker</option>
                 <option value="admin">Admin</option>
+                {session?.user?.worker_role === "super_admin" && (
+                  <option value="super_admin">Super Admin</option>
+                )}
               </select>
             </div>
 
@@ -227,9 +229,16 @@ export default function WorkersPage() {
                     <td className="px-4 py-3 text-sm font-medium text-zinc-900">{w.worker_name}</td>
                     <td className="px-4 py-3 text-sm text-zinc-600">{w.worker_email}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={w.worker_role === "admin" ? "default" : "secondary"} className="capitalize">
-                        {w.worker_role}
-                      </Badge>
+                      <span className={cn(
+                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
+                        w.worker_role === "super_admin"
+                          ? "bg-purple-100 text-purple-700"
+                          : w.worker_role === "admin"
+                          ? "bg-zinc-900 text-white"
+                          : "bg-zinc-100 text-zinc-600"
+                      )}>
+                        {w.worker_role === "super_admin" ? "Super Admin" : w.worker_role}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-zinc-500">{w.worker_branch_name}</td>
                     <td className="px-4 py-3 text-sm text-zinc-500 whitespace-nowrap">{formatDate(w.created_at)}</td>
@@ -257,9 +266,16 @@ export default function WorkersPage() {
                     <p className="text-xs text-zinc-500 mt-0.5 truncate">{w.worker_email}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <Badge variant={w.worker_role === "admin" ? "default" : "secondary"} className="capitalize">
-                      {w.worker_role}
-                    </Badge>
+                    <span className={cn(
+                      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
+                      w.worker_role === "super_admin"
+                        ? "bg-purple-100 text-purple-700"
+                        : w.worker_role === "admin"
+                        ? "bg-zinc-900 text-white"
+                        : "bg-zinc-100 text-zinc-600"
+                    )}>
+                      {w.worker_role === "super_admin" ? "Super Admin" : w.worker_role}
+                    </span>
                     <span className={cn(
                       "text-xs font-semibold",
                       w.is_active ? "text-green-600" : "text-zinc-400"

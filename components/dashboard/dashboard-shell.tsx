@@ -9,10 +9,10 @@ import {
   ReceiptText,
   ClipboardList,
   LogOut,
-  X,
   LayoutDashboard,
   Users,
   Package,
+  ShieldCheck,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,19 @@ function getNavItems(role: string): NavItem[] {
     },
     { label: "Workers", href: "/dashboard/admin/workers", icon: Users },
   ];
-  return role === "admin" ? adminItems : workerItems;
+  const superAdminItems: NavItem[] = [
+    ...adminItems.filter((item) => ![
+      "/dashboard/admin",
+      "/dashboard/admin/inventory",
+      "/dashboard/admin/new",
+      "/dashboard/admin/transactions",
+    ].includes(item.href)),
+    { label: "Shops", href: "/dashboard/admin/shops", icon: LayoutDashboard },
+    { label: "Admin", href: "/dashboard/admin/register", icon: ShieldCheck },
+  ];
+  if (role === "super_admin") return superAdminItems;
+  if (role === "admin") return adminItems;
+  return workerItems;
 }
 
 function SidebarContent({
