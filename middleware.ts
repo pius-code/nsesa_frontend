@@ -4,8 +4,9 @@ import { NextResponse } from "next/server"
 export default auth((req) => {
   const isAuthenticated = !!req.auth
   const { pathname } = req.nextUrl
+  const isPublicReceiptPage = /^\/receipts\/[^/]+$/.test(pathname)
 
-  if (!isAuthenticated && pathname !== "/login") {
+  if (!isAuthenticated && pathname !== "/login" && !isPublicReceiptPage) {
     return NextResponse.redirect(new URL("/login", req.url))
   }
 
