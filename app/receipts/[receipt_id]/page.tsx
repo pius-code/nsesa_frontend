@@ -48,6 +48,16 @@ function formatPaymentMode(mode: string) {
   return mode.charAt(0).toUpperCase() + mode.slice(1);
 }
 
+// Deterministic hue from the shop name — mirrors the sidebar's avatar so a
+// shop without a logo still gets a distinct, consistent brand color.
+function nameToHue(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % 360;
+}
+
 export default function ReceiptPage() {
   const { receipt_id } = useParams<{ receipt_id: string }>();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -116,11 +126,15 @@ export default function ReceiptPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 flex flex-col items-center justify-center p-4 print:bg-white print:p-0 print:min-h-0 print:block">
+    <div className="relative min-h-screen bg-zinc-50 flex flex-col items-center justify-center p-4 overflow-hidden print:bg-white print:p-0 print:min-h-0 print:block"> {/* noqa */}
+      {/* Soft ambient glow — same treatment as the login page for a consistent public-facing feel */} {/* noqa */}
+      <div className="pointer-events-none absolute -top-40 -left-32 h-96 w-96 rounded-full bg-green-200/40 blur-3xl print:hidden" /> {/* noqa */}
+      <div className="pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-green-100/60 blur-3xl print:hidden" /> {/* noqa */}
+
       {/* Receipt card */}
       <div
         ref={cardRef}
-        className="w-full max-w-sm bg-white rounded-2xl shadow-md overflow-hidden"
+        className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl shadow-zinc-900/5 border border-zinc-200/80 overflow-hidden" // noqa
       >
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-zinc-100">
@@ -130,13 +144,14 @@ export default function ReceiptPage() {
                 <img
                   src={receipt.shop_image}
                   alt={receipt.at_shop}
-                  className="h-10 w-10 rounded-full object-cover shrink-0"
+                  className="h-11 w-11 rounded-xl object-cover shrink-0 ring-1 ring-zinc-200"
                 />
               ) : (
-                <div className="h-10 w-10 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
-                  <span className="text-sm font-bold text-zinc-400 uppercase">
-                    {receipt.at_shop.charAt(0)}
-                  </span>
+                <div
+                  className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 font-heading font-bold text-white text-lg"
+                  style={{ backgroundColor: `hsl(${nameToHue(receipt.at_shop)}, 55%, 40%)` }} // noqa
+                >
+                  {receipt.at_shop.charAt(0).toUpperCase()}
                 </div>
               )}
               <div>
@@ -271,7 +286,7 @@ export default function ReceiptPage() {
       </div>
 
       <p className="mt-3 text-xs text-zinc-400 print:hidden">
-        Managed by Father's Joy Pay Services
+        Managed by Father&apos;s Joy Pay Services
       </p>
     </div>
   );

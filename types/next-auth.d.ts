@@ -8,6 +8,7 @@ declare module "next-auth" {
       worker_role: string
       worker_name: string
       worker_shop_name: string
+      worker_shop_image: string
     } & DefaultSession["user"]
   }
 
@@ -17,6 +18,7 @@ declare module "next-auth" {
     worker_role: string
     worker_name: string
     worker_shop_name: string
+    worker_shop_image: string
   }
 }
 
@@ -27,5 +29,6 @@ declare module "next-auth/jwt" {
     worker_role: string
     worker_name: string
     worker_shop_name: string
+    worker_shop_image: string
   }
 }

@@ -13,6 +13,8 @@ import {
   Users,
   Package,
   ShieldCheck,
+  Tags,
+  Contact,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,7 @@ function getNavItems(role: string): NavItem[] {
       href: "/dashboard/worker/transactions",
       icon: ClipboardList,
     },
+    { label: "Clients", href: "/dashboard/worker/clients", icon: Contact },
   ];
   const adminItems: NavItem[] = [
     { label: "Overview", href: "/dashboard/admin", icon: LayoutDashboard },
@@ -44,6 +47,8 @@ function getNavItems(role: string): NavItem[] {
       href: "/dashboard/admin/transactions",
       icon: ClipboardList,
     },
+    { label: "Categories", href: "/dashboard/admin/categories", icon: Tags },
+    { label: "Clients", href: "/dashboard/admin/clients", icon: Contact },
     { label: "Workers", href: "/dashboard/admin/workers", icon: Users },
   ];
   const superAdminItems: NavItem[] = [
@@ -61,6 +66,51 @@ function getNavItems(role: string): NavItem[] {
   return workerItems;
 }
 
+// Deterministic hue from the shop name, so a shop without a logo still gets
+// a distinct, consistent brand color instead of a generic gray placeholder.
+function nameToHue(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % 360;
+}
+
+function ShopIdentity({ session }: { session: Session }) {
+  const shopName = (session.user.worker_shop_name || "Shop").replace(/_/g, " "); // noqa
+  const shopImage = session.user.worker_shop_image;
+  const hue = nameToHue(shopName);
+  const initial = shopName.trim().charAt(0).toUpperCase();
+
+  return (
+    <div className="px-5 py-5 bg-gradient-to-br from-green-800 to-green-950 text-white"> {/* noqa */}
+      <div className="flex items-center gap-3 min-w-0">
+        {shopImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={shopImage}
+            alt={shopName}
+            className="h-11 w-11 rounded-xl object-cover shrink-0 ring-2 ring-white/15"
+          />
+        ) : (
+          <div
+            className="h-11 w-11 rounded-xl shrink-0 flex items-center justify-center font-heading font-bold text-lg text-white ring-2 ring-white/15"
+            style={{ backgroundColor: `hsl(${hue}, 55%, 40%)` }}
+          >
+            {initial}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="font-heading font-bold text-[15px] leading-tight truncate capitalize"> {/* noqa */}
+            {shopName}
+          </p>
+          <p className="text-[11px] text-green-200/70 tracking-wide">FJ Pay POS</p> {/* noqa */}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SidebarContent({
   session,
   navItems,
@@ -74,12 +124,7 @@ function SidebarContent({
 }) {
   return (
     <div className="flex h-full flex-col">
-      {/* Logo */}
-      <div className="px-6 py-5">
-        <span className="text-xl font-bold text-green-600">FJ pay</span>
-      </div>
-
-      <Separator />
+      <ShopIdentity session={session} />
 
       {/* Nav */}
       <nav className="flex-1 space-y-1 px-3 py-4">
@@ -92,14 +137,14 @@ function SidebarContent({
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-green-50 text-green-700"
+                  ? "bg-green-50 text-green-800 font-semibold"
                   : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
               )}
             >
               <Icon
-                className={cn("h-4 w-4", isActive ? "text-green-600" : "")}
+                className={cn("h-4 w-4 shrink-0", isActive ? "text-green-700" : "text-zinc-400")} // noqa
               />
               {item.label}
             </Link>
@@ -116,16 +161,17 @@ function SidebarContent({
             {session.user.worker_name}
           </p>
           <p className="text-xs text-zinc-500 capitalize">
-            {session.user.worker_role}
+            {session.user.worker_role?.replace("_", " ")}
           </p>
         </div>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+          className="flex w-full items-center gap-3 rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors"
         >
           <LogOut className="h-4 w-4" />
           Sign out
         </button>
+        <p className="px-3 text-[10px] text-zinc-300">Powered by FJ Pay</p>
       </div>
     </div>
   );
@@ -141,11 +187,12 @@ export function DashboardShell({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navItems = getNavItems(session.user.worker_role);
+  const shopName = (session.user.worker_shop_name || "Shop").replace(/_/g, " "); // noqa
 
   return (
-    <div className="flex h-screen bg-zinc-50">
+    <div className="flex h-screen bg-gradient-to-br from-zinc-50 to-zinc-100/60">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-zinc-200 bg-white">
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-zinc-200 bg-white shadow-sm"> {/* noqa */}
         <SidebarContent
           session={session}
           navItems={navItems}
@@ -172,7 +219,9 @@ export function DashboardShell({
               />
             </SheetContent>
           </Sheet>
-          <span className="text-lg font-bold text-green-600">FJ Pay</span>
+          <span className="font-heading font-bold text-zinc-900 capitalize truncate"> {/* noqa */}
+            {shopName}
+          </span>
         </header>
 
         {/* Main content */}

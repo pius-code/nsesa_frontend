@@ -4,11 +4,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 disabled:pointer-events-none disabled:opacity-50", // noqa
   {
     variants: {
       variant: {
-        default: "bg-green-600 text-white hover:bg-green-700",
+        default: "bg-green-700 text-white shadow-sm shadow-green-900/10 hover:bg-green-800 hover:shadow-md hover:shadow-green-900/15", // noqa
         destructive: "bg-red-500 text-white hover:bg-red-600",
         outline: "border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900",
         ghost: "hover:bg-zinc-100 text-zinc-700",
