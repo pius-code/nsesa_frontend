@@ -14,13 +14,14 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+let isSigningOut = false;
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      if (typeof window !== "undefined") {
-        signOut({ callbackUrl: "/login" });
-      }
+    if (error.response?.status === 401 && typeof window !== "undefined" && !isSigningOut) { // noqa
+      isSigningOut = true;
+      signOut({ callbackUrl: "/login" });
     }
     return Promise.reject(error);
   },

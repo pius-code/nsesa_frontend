@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -15,6 +16,8 @@ import {
   Check,
   X,
   History,
+  ExternalLink,
+  Send,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { Badge } from "@/components/ui/badge";
@@ -32,9 +35,11 @@ export interface TransactionItem {
 
 export interface Transaction {
   _id: string;
+  receipt_id: string | null;
   customer_name: string;
   customer_number: string | null;
   customer_email: string | null;
+  note: string | null;
   items: TransactionItem[];
   total_price: number;
   processed_by: string;
@@ -91,7 +96,7 @@ interface AuditChange {
 
 interface AuditEntry {
   _id: string;
-  action: "deleted" | "refunded" | "edited";
+  action: "deleted" | "refunded" | "edited" | "receipt_resent" | "payment_completed" | "cancelled"; // noqa
   performed_by_name: string;
   reason: string;
   changes: Record<string, AuditChange> | null;
@@ -124,9 +129,14 @@ function formatChangeEntry(field: string, change: AuditChange) {
 }
 
 function actionBadgeVariant(action: AuditEntry["action"]) {
-  if (action === "deleted") return "destructive" as const;
-  if (action === "refunded") return "secondary" as const;
+  if (action === "deleted" || action === "cancelled") return "destructive" as const; // noqa
+  if (action === "refunded" || action === "receipt_resent") return "secondary" as const; // noqa
+  if (action === "payment_completed") return "default" as const;
   return "default" as const;
+}
+
+function actionLabel(action: AuditEntry["action"]) {
+  return action.replace(/_/g, " ");
 }
 
 function TransactionLogs({ transactionId }: { transactionId: string }) {
@@ -159,7 +169,7 @@ function TransactionLogs({ transactionId }: { transactionId: string }) {
               <div key={entry._id} className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <Badge variant={actionBadgeVariant(entry.action)} className="capitalize">
-                    {entry.action}
+                    {actionLabel(entry.action)}
                   </Badge>
                   <span className="text-xs text-zinc-400">{formatDate(entry.created_at)}</span>
                 </div>
@@ -193,11 +203,9 @@ function formatDate(iso: string) {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const variant = status === "success" ? "default" : status === "pending" ? "warning" : "secondary"; // noqa
   return (
-    <Badge
-      variant={status === "success" ? "default" : "secondary"}
-      className="capitalize"
-    >
+    <Badge variant={variant} className="capitalize">
       {status}
     </Badge>
   );
@@ -244,6 +252,90 @@ function ItemsTable({ items }: { items: TransactionItem[] }) {
   );
 }
 
+function TransactionNote({ note }: { note: string | null }) {
+  if (!note) return null;
+  return (
+    <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-800"> {/* noqa */}
+      <span className="font-semibold">Note:</span> {note}
+    </div>
+  );
+}
+
+function ReceiptActions({ tx }: { tx: Transaction }) {
+  const queryClient = useQueryClient();
+  const [resendOpen, setResendOpen] = useState(false);
+  const [number, setNumber] = useState(tx.customer_number ?? "");
+
+  const resendMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/api/v1/transactions/${tx._id}/resend-receipt`, { // noqa
+        customer_number: number.trim(),
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Receipt resent");
+      setResendOpen(false);
+    },
+    onError: (err: unknown) => toast.error(errorMessage(err, "Failed to resend receipt")), // noqa
+  });
+
+  if (!tx.receipt_id) return null;
+
+  return (
+    <div className="pt-3 mt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}> {/* noqa */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={`/receipts/${tx.receipt_id}`} target="_blank" rel="noopener noreferrer"> {/* noqa */}
+          <Button type="button" size="sm" variant="outline">
+            <ExternalLink className="h-3.5 w-3.5" />
+            View Receipt
+          </Button>
+        </Link>
+        {!resendOpen && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setResendOpen(true)}> {/* noqa */}
+            <Send className="h-3.5 w-3.5" />
+            Resend Receipt
+          </Button>
+        )}
+      </div>
+
+      {resendOpen && (
+        <div className="flex flex-col sm:flex-row gap-2 mt-2.5">
+          <Input
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            placeholder="Customer phone number"
+            className="sm:max-w-xs"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setResendOpen(false)}
+              disabled={resendMutation.isPending}
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => resendMutation.mutate()}
+              disabled={resendMutation.isPending || number.trim().length < 6}
+            >
+              {resendMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {/* noqa */}
+              Send
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type ActionMode = "delete" | "refund" | "edit" | null;
 
 function ManagePanel({ tx }: { tx: Transaction }) {
@@ -253,6 +345,7 @@ function ManagePanel({ tx }: { tx: Transaction }) {
   const [editName, setEditName] = useState(tx.customer_name);
   const [editNumber, setEditNumber] = useState(tx.customer_number ?? "");
   const [editEmail, setEditEmail] = useState(tx.customer_email ?? "");
+  const [editNote, setEditNote] = useState(tx.note ?? "");
 
   function reset() {
     setMode(null);
@@ -292,6 +385,7 @@ function ManagePanel({ tx }: { tx: Transaction }) {
         customer_name: editName.trim() || null,
         customer_number: editNumber.trim() || null,
         customer_email: editEmail.trim() || null,
+        note: editNote.trim() || null,
       });
       return data;
     },
@@ -336,6 +430,7 @@ function ManagePanel({ tx }: { tx: Transaction }) {
           <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Customer name" />
           <Input value={editNumber} onChange={(e) => setEditNumber(e.target.value)} placeholder="Phone" />
           <Input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Email" />
+          <Input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Note (e.g. no pepper)" className="sm:col-span-3" /> {/* noqa */}
         </div>
       )}
       <div className="space-y-1">
@@ -414,6 +509,8 @@ function TransactionRow({ tx, canManage }: { tx: Transaction; canManage: boolean
         <tr>
           <td colSpan={7} className="px-4 pb-4 pt-0 bg-zinc-50/50">
             <ItemsTable items={tx.items} />
+            <TransactionNote note={tx.note} />
+            <ReceiptActions tx={tx} />
             {canManage && <TransactionLogs transactionId={tx._id} />}
             {canManage && <ManagePanel tx={tx} />}
           </td>
@@ -469,6 +566,8 @@ function TransactionCard({ tx, canManage }: { tx: Transaction; canManage: boolea
       {open && (
         <div className="px-4 pb-4 border-t border-zinc-100">
           <ItemsTable items={tx.items} />
+          <TransactionNote note={tx.note} />
+          <ReceiptActions tx={tx} />
           {canManage && <TransactionLogs transactionId={tx._id} />}
           {canManage && <ManagePanel tx={tx} />}
         </div>

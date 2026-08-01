@@ -16,6 +16,7 @@ interface RegisterPayload {
   worker_branch_name: string;
   worker_role: string;
   worker_email: string;
+  worker_phone: string;
   worker_password: string;
   worker_shop_image: string;
 }
@@ -27,6 +28,7 @@ export default function RegisterPage() {
     worker_branch_name: "",
     worker_role: "worker",
     worker_email: "",
+    worker_phone: "",
     worker_password: "",
     worker_shop_image: "",
   });
@@ -48,6 +50,7 @@ export default function RegisterPage() {
         worker_branch_name: "",
         worker_role: "worker",
         worker_email: "",
+        worker_phone: "",
         worker_password: "",
         worker_shop_image: "",
       });
@@ -162,6 +165,16 @@ export default function RegisterPage() {
               value={form.worker_email}
               onChange={(e) => set("worker_email", e.target.value)}
               required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="worker_phone">Phone</Label>
+            <Input
+              id="worker_phone"
+              placeholder="0XX XXX XXXX (used for platform SMS)"
+              value={form.worker_phone}
+              onChange={(e) => set("worker_phone", e.target.value)}
             />
           </div>
 

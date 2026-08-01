@@ -51,6 +51,7 @@ export default function WorkersPage() {
   const [name, setName] = useState("")
   const [role, setRole] = useState("worker")
   const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [success, setSuccess] = useState(false)
 
@@ -60,6 +61,7 @@ export default function WorkersPage() {
         worker_name: name.trim(),
         worker_role: role,
         worker_email: email.trim(),
+        worker_phone: phone.trim() || null,
         worker_password: password,
       })
       return data
@@ -70,6 +72,7 @@ export default function WorkersPage() {
       setName("")
       setRole("worker")
       setEmail("")
+      setPhone("")
       setPassword("")
       setShowForm(false)
       setTimeout(() => setSuccess(false), 4000)
@@ -158,6 +161,16 @@ export default function WorkersPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="worker_phone">Phone</Label>
+              <Input
+                id="worker_phone"
+                placeholder="0XX XXX XXXX (optional, used for platform SMS)"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
               />
             </div>
 

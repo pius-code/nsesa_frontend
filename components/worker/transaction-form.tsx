@@ -82,8 +82,10 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
 
   const [customerName, setCustomerName] = useState("")
   const [customerNumber, setCustomerNumber] = useState("")
+  const [note, setNote] = useState("")
   const [sendSms, setSendSms] = useState(true)
-  const [paymentMode, setPaymentMode] = useState<"cash" | "momo" | "card">("cash")
+  const [paymentMode, setPaymentMode] = useState<"cash" | "momo" | "card" | "pay_later">("cash") // noqa
+  const payLater = paymentMode === "pay_later"
 
   const [clientId, setClientId] = useState<string | null>(null)
   const [clientQuery, setClientQuery] = useState("")
@@ -207,20 +209,23 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
         client_id: clientId,
         items: cart,
         total_price: total,
-        payment_mode: paymentMode,
+        payment_mode: payLater ? null : paymentMode,
         processed_by: workerName,
         processed_by_id: workerId ?? null,
-        send_sms: sendSms,
+        send_sms: payLater ? false : sendSms,
+        pay_later: payLater,
+        note: note.trim() || null,
       })
       return data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      toast.success("Transaction recorded successfully!")
+      toast.success(payLater ? "Order saved as pending!" : "Transaction recorded successfully!") // noqa
       setCart([])
       setCustomerName("")
       setCustomerNumber("")
+      setNote("")
       clearClient()
       clearProduct()
     },
@@ -379,34 +384,53 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="note">Note (optional)</Label>
+            <Input
+              id="note"
+              placeholder="e.g. no pepper, vegetarian, sugar-free"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <Label>Payment Method</Label>
-            <div className="flex gap-2">
-              {(["cash", "momo", "card"] as const).map((mode) => (
+            <div className="grid grid-cols-2 gap-2">
+              {(["cash", "momo", "card", "pay_later"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setPaymentMode(mode)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${
+                  className={`py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${
                     paymentMode === mode
-                      ? "bg-green-600 border-green-600 text-white"
+                      ? mode === "pay_later"
+                        ? "bg-amber-500 border-amber-500 text-white"
+                        : "bg-green-600 border-green-600 text-white"
                       : "bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50"
                   }`}
                 >
-                  {mode === "momo" ? "MoMo" : mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  {mode === "momo" ? "MoMo" : mode === "pay_later" ? "Pay Later" : mode.charAt(0).toUpperCase() + mode.slice(1)} {/* noqa */}
                 </button>
               ))}
             </div>
+            {payLater && (
+              <p className="text-xs text-amber-600">
+                Saved as a pending order — no payment or receipt yet. Complete it later from Pending Orders. {/* noqa */}
+              </p>
+            )}
           </div>
 
-          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
-            <input
-              type="checkbox"
-              checked={sendSms}
-              onChange={(e) => setSendSms(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-300 accent-green-600 cursor-pointer"
-            />
-            <span className="text-sm text-zinc-700">Send SMS confirmation to customer</span>
-          </label>
+          {!payLater && (
+            <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+              <input
+                type="checkbox"
+                checked={sendSms}
+                onChange={(e) => setSendSms(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 accent-green-600 cursor-pointer"
+              />
+              <span className="text-sm text-zinc-700">Send SMS confirmation to customer</span>
+            </label>
+          )}
         </div>
 
         {/* Product picker */}
@@ -599,7 +623,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           <Button
             type="submit"
             size="lg"
-            className="w-full"
+            className={payLater ? "w-full bg-amber-500 hover:bg-amber-600" : "w-full"} // noqa
             disabled={!canSubmit}
           >
             {mutation.isPending ? (
@@ -608,7 +632,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                 Processing…
               </>
             ) : (
-              `Record Transaction${cart.length > 0 ? ` · GH₵${total.toFixed(2)}` : ""}`
+              `${payLater ? "Save as Pending" : "Record Transaction"}${cart.length > 0 ? ` · GH₵${total.toFixed(2)}` : ""}` // noqa
             )}
           </Button>
           {cart.length === 0 && (

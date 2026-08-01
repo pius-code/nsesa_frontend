@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   Tags,
   Contact,
+  Clock,
+  Megaphone,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,7 @@ interface NavItem {
 function getNavItems(role: string): NavItem[] {
   const workerItems: NavItem[] = [
     { label: "New Transaction", href: "/dashboard/worker", icon: ReceiptText },
+    { label: "Pending Orders", href: "/dashboard/worker/pending", icon: Clock },
     {
       label: "Transactions",
       href: "/dashboard/worker/transactions",
@@ -41,6 +44,7 @@ function getNavItems(role: string): NavItem[] {
   const adminItems: NavItem[] = [
     { label: "Overview", href: "/dashboard/admin", icon: LayoutDashboard },
     { label: "Transactions", href: "/dashboard/admin/new", icon: ReceiptText },
+    { label: "Pending Orders", href: "/dashboard/admin/pending", icon: Clock },
     { label: "Inventory", href: "/dashboard/admin/inventory", icon: Package },
     {
       label: "View Transactions",
@@ -49,6 +53,7 @@ function getNavItems(role: string): NavItem[] {
     },
     { label: "Categories", href: "/dashboard/admin/categories", icon: Tags },
     { label: "Clients", href: "/dashboard/admin/clients", icon: Contact },
+    { label: "Send SMS", href: "/dashboard/admin/broadcast", icon: Megaphone },
     { label: "Workers", href: "/dashboard/admin/workers", icon: Users },
   ];
   const superAdminItems: NavItem[] = [
@@ -56,6 +61,7 @@ function getNavItems(role: string): NavItem[] {
       "/dashboard/admin",
       "/dashboard/admin/inventory",
       "/dashboard/admin/new",
+      "/dashboard/admin/pending",
       "/dashboard/admin/transactions",
     ].includes(item.href)),
     { label: "Shops", href: "/dashboard/admin/shops", icon: LayoutDashboard },
@@ -127,7 +133,7 @@ function SidebarContent({
       <ShopIdentity session={session} />
 
       {/* Nav */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;

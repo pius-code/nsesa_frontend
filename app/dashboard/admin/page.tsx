@@ -16,6 +16,9 @@ import {
   RotateCcw,
   AlertTriangle,
   Award,
+  Clock,
+  Users2,
+  CheckCircle2,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
@@ -50,6 +53,10 @@ interface DashboardOverview {
   previous_week_revenue: number;
   today_refund_count: number;
   today_refund_value: number;
+  pending_order_count: number;
+  pending_order_value: number;
+  total_unique_customers: number;
+  month_completed_transaction_count: number;
   payment_breakdown_today: PaymentBreakdownEntry[];
   top_products_week: TopProductEntry[];
   low_stock_items: LowStockEntry[];
@@ -110,27 +117,37 @@ function StatCard({
   sub,
   icon: Icon,
   color,
+  href,
 }: {
   label: string;
   value: string;
   sub?: React.ReactNode;
   icon: React.ElementType;
   color: string;
+  href?: string;
 }) {
-  return (
-    <div className="bg-white rounded-xl border border-zinc-200 p-5 flex items-start gap-4">
-      <div className={`rounded-lg p-2.5 ${color}`}>
+  const content = (
+    <div className="bg-white rounded-xl border border-zinc-200 p-5 flex items-start gap-4 h-full"> {/* noqa */}
+      <div className={`shrink-0 rounded-lg p-2.5 ${color}`}>
         <Icon className="h-5 w-5" />
       </div>
-      <div>
-        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide truncate"> {/* noqa */}
           {label}
         </p>
-        <p className="mt-1 text-2xl font-bold text-zinc-900">{value}</p>
-        {sub && <p className="text-xs text-zinc-400 mt-0.5">{sub}</p>}
+        <p className="mt-1 text-2xl font-bold text-zinc-900 truncate">{value}</p> {/* noqa */}
+        {sub && <p className="text-xs text-zinc-400 mt-0.5 truncate">{sub}</p>}
       </div>
     </div>
   );
+  if (href) {
+    return (
+      <Link href={href} className="block transition-shadow hover:shadow-md rounded-xl"> {/* noqa */}
+        {content}
+      </Link>
+    );
+  }
+  return content;
 }
 
 function RecentRow({ tx }: { tx: Transaction }) {
@@ -192,7 +209,7 @@ export default function AdminOverviewPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
             <StatCard
               label="Revenue today"
               value={`GH₵${(overview?.today_revenue ?? 0).toFixed(2)}`}
@@ -236,6 +253,37 @@ export default function AdminOverviewPage() {
                   ? "bg-red-50 text-red-600"
                   : "bg-zinc-100 text-zinc-500"
               }
+            />
+            <StatCard
+              label="Pending orders"
+              value={String(overview?.pending_order_count ?? 0)}
+              sub={
+                overview && overview.pending_order_count > 0
+                  ? `GH₵${overview.pending_order_value.toFixed(2)} unpaid`
+                  : "no open tabs"
+              }
+              icon={Clock}
+              color={
+                overview && overview.pending_order_count > 0
+                  ? "bg-amber-50 text-amber-600"
+                  : "bg-zinc-100 text-zinc-500"
+              }
+              href="/dashboard/admin/pending"
+            />
+            <StatCard
+              label="Total customers"
+              value={String(overview?.total_unique_customers ?? 0)}
+              sub="all time"
+              icon={Users2}
+              color="bg-blue-50 text-blue-600"
+            />
+            <StatCard
+              label="Completed this month"
+              value={String(overview?.month_completed_transaction_count ?? 0)} // noqa
+              sub="transactions"
+              icon={CheckCircle2}
+              color="bg-emerald-50 text-emerald-600"
+              href="/dashboard/admin/transactions"
             />
           </div>
 
