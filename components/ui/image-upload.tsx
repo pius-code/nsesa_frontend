@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { useDropzone } from "react-dropzone"
+import { useDropzone, FileRejection } from "react-dropzone"
 import { ImageIcon, Loader2, X, UploadCloud } from "lucide-react"
 
 // TODO: Switch to signed uploads via a backend endpoint for production security
@@ -17,9 +17,28 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
+    const rejection = fileRejections[0]
+    if (!rejection) return
+
+    const issue = rejection.errors?.[0]
+    if (issue?.code === "file-too-large") {
+      setError("Image size exceeds 5MB limit. Please select a smaller file.")
+    } else if (issue?.code === "file-invalid-type") {
+      setError("Unsupported file format. Please upload JPG, PNG, or WEBP.")
+    } else {
+      setError(issue?.message || "File rejected. Please try another image.")
+    }
+  }, [])
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
     if (!file) return
+
+    if (!CLOUD_NAME || !UPLOAD_PRESET) {
+      setError("Cloudinary configuration missing (CLOUD_NAME or UPLOAD_PRESET).")
+      return
+    }
 
     setError(null)
     setUploading(true)
@@ -27,19 +46,23 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
     try {
       const formData = new FormData()
       formData.append("file", file)
-      formData.append("upload_preset", UPLOAD_PRESET!)
+      formData.append("upload_preset", UPLOAD_PRESET)
 
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
         { method: "POST", body: formData }
       )
 
-      if (!res.ok) throw new Error("Upload failed")
-
       const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data?.error?.message || "Cloudinary upload failed")
+      }
+
       onChange(data.secure_url)
-    } catch {
-      setError("Upload failed. Please try again.")
+    } catch (err: any) {
+      console.error("Image upload error:", err)
+      setError(err?.message || "Upload failed. Please try again.")
     } finally {
       setUploading(false)
     }
@@ -47,6 +70,7 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: { "image/*": [".jpg", ".jpeg", ".png", ".webp"] },
     maxFiles: 1,
     maxSize: 5 * 1024 * 1024, // 5MB
