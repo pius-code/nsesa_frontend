@@ -29,6 +29,9 @@ interface InventoryItem {
   sku: string | null
   category_id: string | null
   category_name: string | null
+  cost_price?: number | null
+  supplier_name?: string | null
+  supplier_contact?: string | null
 }
 
 interface Category {
@@ -111,9 +114,12 @@ export default function InventoryPage() {
 
   const [productName, setProductName] = useState("")
   const [productPrice, setProductPrice] = useState("")
+  const [costPrice, setCostPrice] = useState("")
   const [amountAvailable, setAmountAvailable] = useState("")
   const [sku, setSku] = useState("")
   const [categoryId, setCategoryId] = useState("")
+  const [supplierName, setSupplierName] = useState("")
+  const [supplierContact, setSupplierContact] = useState("")
   const [success, setSuccess] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
@@ -122,9 +128,12 @@ export default function InventoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editPrice, setEditPrice] = useState("")
+  const [editCostPrice, setEditCostPrice] = useState("")
   const [editQty, setEditQty] = useState("")
   const [editSku, setEditSku] = useState("")
   const [editCategoryId, setEditCategoryId] = useState("")
+  const [editSupplierName, setEditSupplierName] = useState("")
+  const [editSupplierContact, setEditSupplierContact] = useState("")
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -132,9 +141,12 @@ export default function InventoryPage() {
     setEditingId(item._id)
     setEditName(item.product_name)
     setEditPrice(String(item.product_price))
+    setEditCostPrice(item.cost_price != null ? String(item.cost_price) : "")
     setEditQty(String(item.amount_available))
     setEditSku(item.sku ?? "")
     setEditCategoryId(item.category_id ?? "")
+    setEditSupplierName(item.supplier_name ?? "")
+    setEditSupplierContact(item.supplier_contact ?? "")
   }
 
   function cancelEdit() {
@@ -146,9 +158,12 @@ export default function InventoryPage() {
       const { data } = await api.post("/api/v1/add_to_inventory", {
         product_name: productName.trim(),
         product_price: parseFloat(productPrice),
+        cost_price: costPrice ? parseFloat(costPrice) : null,
         amount_available: parseInt(amountAvailable),
         sku: sku.trim() || null,
         category_id: categoryId || null,
+        supplier_name: supplierName.trim() || null,
+        supplier_contact: supplierContact.trim() || null,
       })
       return data
     },
@@ -157,9 +172,12 @@ export default function InventoryPage() {
       setSuccess(true)
       setProductName("")
       setProductPrice("")
+      setCostPrice("")
       setAmountAvailable("")
       setSku("")
       setCategoryId("")
+      setSupplierName("")
+      setSupplierContact("")
       setShowForm(false)
       setTimeout(() => setSuccess(false), 4000)
     },
@@ -170,9 +188,12 @@ export default function InventoryPage() {
       const { data } = await api.patch(`/api/v1/inventory/update_stock/${id}`, {
         product_name: editName.trim(),
         product_price: parseFloat(editPrice),
+        cost_price: editCostPrice ? parseFloat(editCostPrice) : null,
         amount_available: parseInt(editQty),
         sku: editSku.trim() || null,
         category_id: editCategoryId || null,
+        supplier_name: editSupplierName.trim() || null,
+        supplier_contact: editSupplierContact.trim() || null,
       })
       return data
     },
@@ -242,16 +263,28 @@ export default function InventoryPage() {
         <Input value={editSku} onChange={(e) => setEditSku(e.target.value)} placeholder="Optional" />
       </div>
       <div className="space-y-1.5">
-        <Label>Price (GH₵)</Label>
+        <Label>Selling Price (GH₵)</Label>
         <Input type="number" min="0" step="0.01" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Cost Price (GH₵)</Label>
+        <Input type="number" min="0" step="0.01" value={editCostPrice} onChange={(e) => setEditCostPrice(e.target.value)} placeholder="Optional unit cost" />
       </div>
       <div className="space-y-1.5">
         <Label>Stock Qty</Label>
         <Input type="number" min="0" value={editQty} onChange={(e) => setEditQty(e.target.value)} />
       </div>
-      <div className="space-y-1.5 sm:col-span-2">
+      <div className="space-y-1.5">
         <Label>Category</Label>
         <CategorySelect id="edit_category" value={editCategoryId} onChange={setEditCategoryId} categories={categories} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Supplier Name</Label>
+        <Input value={editSupplierName} onChange={(e) => setEditSupplierName(e.target.value)} placeholder="Optional supplier" />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Supplier Contact</Label>
+        <Input value={editSupplierContact} onChange={(e) => setEditSupplierContact(e.target.value)} placeholder="Optional contact details" />
       </div>
     </div>
   )
@@ -408,7 +441,7 @@ export default function InventoryPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="product_price">
-                Price (GH₵) <span className="text-red-500">*</span>
+                Selling Price (GH₵) <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="product_price"
@@ -421,6 +454,21 @@ export default function InventoryPage() {
                 required
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cost_price">Cost Price (GH₵)</Label>
+              <Input
+                id="cost_price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00 (unit cost)"
+                value={costPrice}
+                onChange={(e) => setCostPrice(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="amount_available">
                 Stock Qty <span className="text-red-500">*</span>
@@ -435,9 +483,6 @@ export default function InventoryPage() {
                 required
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="sku">SKU / Barcode</Label>
               <Input
@@ -447,10 +492,32 @@ export default function InventoryPage() {
                 onChange={(e) => setSku(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="category_id">Category</Label>
               <CategorySelect id="category_id" value={categoryId} onChange={setCategoryId} categories={categories} />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="supplier_name">Supplier Name</Label>
+              <Input
+                id="supplier_name"
+                placeholder="Optional supplier"
+                value={supplierName}
+                onChange={(e) => setSupplierName(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="supplier_contact">Supplier Contact</Label>
+            <Input
+              id="supplier_contact"
+              placeholder="e.g. Phone, email, or address"
+              value={supplierContact}
+              onChange={(e) => setSupplierContact(e.target.value)}
+            />
           </div>
 
           <div className="flex gap-3 pt-1">
@@ -497,6 +564,8 @@ export default function InventoryPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Category</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">Price</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">Cost Price</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Supplier</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">In Stock</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
                   <th className="px-4 py-3" />
@@ -512,7 +581,7 @@ export default function InventoryPage() {
                   if (deletingId === item._id) {
                     return (
                       <tr key={item._id} className="bg-red-50/40">
-                        <td colSpan={6} className="px-4 py-4">
+                        <td colSpan={8} className="px-4 py-4">
                           <DeleteConfirm item={item} />
                         </td>
                       </tr>
@@ -522,7 +591,7 @@ export default function InventoryPage() {
                   if (isEditing) {
                     return (
                       <tr key={item._id} className="bg-zinc-50">
-                        <td colSpan={6} className="px-4 py-4">
+                        <td colSpan={8} className="px-4 py-4">
                           <div className="space-y-3">
                             {editForm}
                             <div className="flex justify-end gap-2">
@@ -556,6 +625,21 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-right text-zinc-700 font-semibold">
                         GH₵{item.product_price.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-zinc-500">
+                        {item.cost_price != null ? `GH₵${item.cost_price.toFixed(2)}` : <span className="text-zinc-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-zinc-600">
+                        {item.supplier_name ? (
+                          <div>
+                            <span className="font-medium text-zinc-800">{item.supplier_name}</span>
+                            {item.supplier_contact && (
+                              <span className="block text-xs text-zinc-400">{item.supplier_contact}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-zinc-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className={cn("text-sm font-bold", lowStock ? "text-red-600" : "text-zinc-800")}>
@@ -645,9 +729,18 @@ export default function InventoryPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-zinc-900 truncate">{item.product_name}</p>
                       <p className="text-sm text-zinc-500 mt-0.5">
-                        GH₵{item.product_price.toFixed(2)}
+                        Price: GH₵{item.product_price.toFixed(2)}
+                        {item.cost_price != null && (
+                          <span className="text-zinc-400"> (Cost: GH₵{item.cost_price.toFixed(2)})</span>
+                        )}
                         {item.category_name && <span className="text-zinc-300"> · {item.category_name}</span>}
                       </p>
+                      {item.supplier_name && (
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Supplier: <span className="text-zinc-600 font-medium">{item.supplier_name}</span>
+                          {item.supplier_contact && ` (${item.supplier_contact})`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span className={cn("text-lg font-bold", lowStock ? "text-red-600" : "text-zinc-800")}>

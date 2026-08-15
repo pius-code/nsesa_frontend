@@ -17,6 +17,7 @@ import {
   Contact,
   Clock,
   Megaphone,
+  TrendingUp,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,11 @@ function getNavItems(role: string): NavItem[] {
       label: "View Transactions",
       href: "/dashboard/admin/transactions",
       icon: ClipboardList,
+    },
+    {
+      label: "Financial Reports",
+      href: "/dashboard/admin/reports",
+      icon: TrendingUp,
     },
     { label: "Categories", href: "/dashboard/admin/categories", icon: Tags },
     { label: "Clients", href: "/dashboard/admin/clients", icon: Contact },
