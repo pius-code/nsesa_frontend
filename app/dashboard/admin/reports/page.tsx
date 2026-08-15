@@ -16,6 +16,8 @@ import {
   Banknote,
   AlertCircle,
   FileSpreadsheet,
+  Receipt,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios";
@@ -40,6 +42,7 @@ interface DailyTrend {
   revenue: number;
   cogs?: number;
   gross_profit?: number;
+  expenses?: number;
 }
 
 interface PaymentBreakdownItem {
@@ -53,6 +56,8 @@ interface FinancialReportResponse {
   revenue: number;
   cogs: number;
   gross_profit: number;
+  expenses?: number;
+  net_profit?: number;
   profit_margin_pct: number;
   top_profitable_products?: TopProduct[];
   payment_breakdown?: PaymentBreakdownItem[] | Record<string, number>;
@@ -123,7 +128,7 @@ export default function ReportsPage() {
     }
   };
 
-  // Normalize payment breakdown
+  // Normalize payment breakdown with multi-field fallback
   const parsedPaymentBreakdown: PaymentBreakdownItem[] = (() => {
     if (!report?.payment_breakdown) return [];
 
@@ -134,10 +139,15 @@ export default function ReportsPage() {
         const rawMethod =
           item?.method ||
           item?.payment_method ||
+          item?.payment_mode ||
+          item?.payment_channel ||
+          item?.channel ||
           item?.mode ||
           item?.type ||
-          "Other";
-        const amt = Number(item?.amount || item?.total || 0);
+          item?._id ||
+          item?.name ||
+          "Cash";
+        const amt = Number(item?.amount || item?.total || item?.revenue || 0);
         return {
           method: String(rawMethod),
           amount: amt,
@@ -150,7 +160,7 @@ export default function ReportsPage() {
     return Object.entries(report.payment_breakdown).map(([method, amount]) => {
       const amt = Number(amount || 0);
       return {
-        method: method || "Other",
+        method: method || "Cash",
         amount: amt,
         percentage: Math.round((amt / totalRev) * 100),
       };
@@ -160,37 +170,55 @@ export default function ReportsPage() {
   const getMethodIcon = (method?: string | null) => {
     if (!method) return DollarSign;
     const m = String(method).toLowerCase();
-    if (m.includes("momo") || m.includes("mobile")) return Smartphone;
-    if (m.includes("card") || m.includes("paystack")) return CreditCard;
-    if (m.includes("cash")) return Banknote;
+    if (
+      m.includes("momo") ||
+      m.includes("mobile") ||
+      m.includes("mtn") ||
+      m.includes("telecel") ||
+      m.includes("at")
+    )
+      return Smartphone;
+    if (
+      m.includes("card") ||
+      m.includes("paystack") ||
+      m.includes("pos") ||
+      m.includes("visa") ||
+      m.includes("mastercard")
+    )
+      return CreditCard;
+    if (m.includes("cash") || m.includes("hand")) return Banknote;
     return DollarSign;
   };
 
+  const expenses = report?.expenses ?? 0;
+  const grossProfit = report?.gross_profit ?? 0;
+  const netProfit = report?.net_profit ?? grossProfit - expenses;
+
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+    <div className="flex flex-col gap-5 sm:gap-6 max-w-7xl mx-auto w-full px-1 sm:px-0">
       {/* Top Header & Period Selector */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-green-600" />
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 shrink-0" />
             Financial Reports & Profit Analytics
           </h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Track revenue, COGS, gross profit margins, and download export reports.
+          <p className="text-xs sm:text-sm text-zinc-500 mt-1">
+            Track revenue, COGS, gross & net profit margins, and export financial reports.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Period selector */}
-          <div className="flex bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+          <div className="flex bg-zinc-100 p-1 rounded-xl border border-zinc-200 shrink-0">
             {(["weekly", "monthly", "custom"] as ReportPeriod[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={cn(
-                  "px-3.5 py-1.5 text-xs font-semibold rounded-lg capitalize transition-colors",
+                  "px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-colors",
                   period === p
-                    ? "bg-white text-green-800 shadow-xs font-bold"
+                    ? "bg-white text-green-800 shadow-2xs font-bold"
                     : "text-zinc-600 hover:text-zinc-900"
                 )}
               >
@@ -201,24 +229,24 @@ export default function ReportsPage() {
 
           {/* Custom Date Inputs */}
           {period === "custom" && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <div className="flex items-center gap-1 bg-white border border-zinc-300 rounded-lg px-2 py-1">
-                <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                <Calendar className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                 <Input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="h-7 text-xs border-0 p-0 shadow-none focus-visible:ring-0 w-28"
+                  className="h-7 text-xs border-0 p-0 shadow-none focus-visible:ring-0 w-24 sm:w-28"
                 />
               </div>
               <span className="text-xs text-zinc-400">to</span>
               <div className="flex items-center gap-1 bg-white border border-zinc-300 rounded-lg px-2 py-1">
-                <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                <Calendar className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                 <Input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="h-7 text-xs border-0 p-0 shadow-none focus-visible:ring-0 w-28"
+                  className="h-7 text-xs border-0 p-0 shadow-none focus-visible:ring-0 w-24 sm:w-28"
                 />
               </div>
             </div>
@@ -228,7 +256,7 @@ export default function ReportsPage() {
           <Button
             onClick={handleDownloadPdf}
             disabled={downloadingPdf || isLoading}
-            className="bg-green-700 hover:bg-green-800 text-white gap-2 shadow-xs"
+            className="bg-green-700 hover:bg-green-800 text-white gap-1.5 text-xs sm:text-sm shadow-2xs w-full sm:w-auto"
           >
             {downloadingPdf ? (
               <>
@@ -270,102 +298,131 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          {/* KPI Header Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI Header Grid - Fully Responsive 5 Financial Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
             {/* Revenue */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-2xs flex flex-col justify-between min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wide truncate">
                   Total Revenue
                 </span>
-                <div className="p-2 rounded-xl bg-green-50 text-green-700">
-                  <DollarSign className="h-5 w-5" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-green-50 text-green-700 shrink-0">
+                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
               </div>
-              <div className="mt-3">
-                <p className="text-2xl font-bold text-zinc-900">
+              <div className="mt-2.5 sm:mt-3">
+                <p className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight truncate">
                   GH₵{(report?.revenue ?? 0).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </p>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Gross income from completed transactions
+                <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 truncate">
+                  Gross income from sales
                 </p>
               </div>
             </div>
 
             {/* COGS */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
-                  Cost of Goods Sold (COGS)
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-2xs flex flex-col justify-between min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wide truncate">
+                  Cost of Goods (COGS)
                 </span>
-                <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
-                  <Package className="h-5 w-5" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-orange-50 text-orange-600 shrink-0">
+                  <Package className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
               </div>
-              <div className="mt-3">
-                <p className="text-2xl font-bold text-zinc-900">
+              <div className="mt-2.5 sm:mt-3">
+                <p className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight truncate">
                   GH₵{(report?.cogs ?? 0).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </p>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Total purchase & unit cost of sold inventory
+                <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 truncate">
+                  Purchase cost of sold items
                 </p>
               </div>
             </div>
 
             {/* Gross Profit */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-2xs flex flex-col justify-between min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wide truncate">
                   Gross Profit
                 </span>
-                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
-                  <PiggyBank className="h-5 w-5" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-emerald-50 text-emerald-700 shrink-0">
+                  <PiggyBank className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-2.5 sm:mt-3">
                 <p
                   className={cn(
-                    "text-2xl font-bold",
-                    (report?.gross_profit ?? 0) >= 0
-                      ? "text-emerald-600"
-                      : "text-red-600"
+                    "text-xl sm:text-2xl font-bold tracking-tight truncate",
+                    grossProfit >= 0 ? "text-emerald-600" : "text-red-600"
                   )}
                 >
-                  GH₵{(report?.gross_profit ?? 0).toLocaleString(undefined, {
+                  GH₵{grossProfit.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </p>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Net earnings after inventory unit costs
+                <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 truncate">
+                  Revenue minus COGS
                 </p>
               </div>
             </div>
 
-            {/* Profit Margin % */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
-                  Profit Margin
+            {/* Expenses */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-2xs flex flex-col justify-between min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wide truncate">
+                  Expenses
                 </span>
-                <div className="p-2 rounded-xl bg-blue-50 text-blue-700">
-                  <Percent className="h-5 w-5" />
+                <div className="p-1.5 sm:p-2 rounded-xl bg-purple-50 text-purple-700 shrink-0">
+                  <Receipt className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
               </div>
-              <div className="mt-3">
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-bold text-zinc-900">
-                    {(report?.profit_margin_pct ?? 0).toFixed(1)}%
+              <div className="mt-2.5 sm:mt-3">
+                <p className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight truncate">
+                  GH₵{expenses.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </p>
+                <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 truncate">
+                  Operational costs & overhead
+                </p>
+              </div>
+            </div>
+
+            {/* Net Profit & Margin % */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-2xs flex flex-col justify-between min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wide truncate">
+                  Net Profit
+                </span>
+                <div className="p-1.5 sm:p-2 rounded-xl bg-blue-50 text-blue-700 shrink-0">
+                  <Wallet className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+              </div>
+              <div className="mt-2.5 sm:mt-3">
+                <div className="flex flex-wrap items-baseline gap-1.5 sm:gap-2">
+                  <p
+                    className={cn(
+                      "text-xl sm:text-2xl font-bold tracking-tight truncate",
+                      netProfit >= 0 ? "text-zinc-900" : "text-red-600"
+                    )}
+                  >
+                    GH₵{netProfit.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </p>
                   <span
                     className={cn(
-                      "text-xs font-semibold px-2 py-0.5 rounded-full",
+                      "text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shrink-0",
                       (report?.profit_margin_pct ?? 0) >= 20
                         ? "bg-green-100 text-green-800"
                         : (report?.profit_margin_pct ?? 0) > 0
@@ -373,22 +430,20 @@ export default function ReportsPage() {
                         : "bg-red-100 text-red-800"
                     )}
                   >
-                    {(report?.profit_margin_pct ?? 0) >= 20
-                      ? "Healthy"
-                      : "Moderate"}
+                    {(report?.profit_margin_pct ?? 0).toFixed(1)}%
                   </span>
                 </div>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Profit percentage relative to revenue
+                <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 truncate">
+                  Gross profit minus expenses
                 </p>
               </div>
             </div>
           </div>
 
           {/* Daily Trends & Payment Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
             {/* Daily Trends Chart */}
-            <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col gap-4">
+            <div className="lg:col-span-2 bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-heading font-semibold text-zinc-900 text-base">
@@ -401,7 +456,7 @@ export default function ReportsPage() {
               </div>
 
               {report?.daily_trends && report.daily_trends.length > 0 ? (
-                <div className="space-y-3 mt-2">
+                <div className="space-y-3 mt-1">
                   {report.daily_trends.map((item, idx) => {
                     const maxVal = Math.max(
                       ...report.daily_trends!.map((t) => t.revenue || 1),
@@ -419,16 +474,16 @@ export default function ReportsPage() {
 
                     return (
                       <div key={idx} className="space-y-1 text-xs">
-                        <div className="flex justify-between font-medium text-zinc-600">
-                          <span>{item.date}</span>
-                          <span>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2 font-medium text-zinc-600">
+                          <span className="font-semibold text-zinc-800">{item.date}</span>
+                          <span className="text-[11px] sm:text-xs">
                             GH₵{item.revenue.toFixed(2)}{" "}
                             <span className="text-emerald-600 font-semibold ml-1">
                               (Profit: GH₵{(item.gross_profit ?? 0).toFixed(2)})
                             </span>
                           </span>
                         </div>
-                        <div className="h-4 w-full bg-zinc-100 rounded-full overflow-hidden flex relative">
+                        <div className="h-3.5 sm:h-4 w-full bg-zinc-100 rounded-full overflow-hidden flex relative">
                           <div
                             style={{ width: `${revPct}%` }}
                             className="h-full bg-green-500/30 rounded-full"
@@ -454,7 +509,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Payment Method Breakdown */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col gap-4">
               <div>
                 <h3 className="font-heading font-semibold text-zinc-900 text-base">
                   Payment Channels
@@ -475,16 +530,16 @@ export default function ReportsPage() {
 
                     return (
                       <div key={idx} className="pt-3 first:pt-0 space-y-1.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-700">
-                              <Icon className="h-4 w-4" />
+                        <div className="flex items-center justify-between text-xs sm:text-sm gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-700 shrink-0">
+                              <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <span className="font-medium text-zinc-800 capitalize">
-                              {(item.method || "Other").replace(/_/g, " ")}
+                            <span className="font-medium text-zinc-800 capitalize truncate">
+                              {(item.method || "Cash").replace(/_/g, " ")}
                             </span>
                           </div>
-                          <span className="font-bold text-zinc-900">
+                          <span className="font-bold text-zinc-900 shrink-0">
                             GH₵{item.amount.toFixed(2)}
                           </span>
                         </div>
@@ -495,7 +550,7 @@ export default function ReportsPage() {
                               className="h-full bg-green-600 rounded-full"
                             />
                           </div>
-                          <span className="text-xs text-zinc-400 font-semibold w-8 text-right">
+                          <span className="text-xs text-zinc-400 font-semibold w-8 text-right shrink-0">
                             {pct}%
                           </span>
                         </div>
@@ -516,7 +571,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Top Profitable Products */}
-          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden p-5 space-y-4">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4 sm:p-5 space-y-4 overflow-hidden">
             <div>
               <h3 className="font-heading font-semibold text-zinc-900 text-base">
                 Top Profitable Products
@@ -528,19 +583,19 @@ export default function ReportsPage() {
 
             {report?.top_profitable_products &&
             report.top_profitable_products.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
+              <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                <table className="w-full text-left min-w-[550px]">
                   <thead className="border-b border-zinc-200 bg-zinc-50/70 text-xs font-semibold text-zinc-500 uppercase tracking-wide">
                     <tr>
-                      <th className="px-4 py-3">Product</th>
-                      <th className="px-4 py-3 text-right">Units Sold</th>
-                      <th className="px-4 py-3 text-right">Total Revenue</th>
-                      <th className="px-4 py-3 text-right">COGS</th>
-                      <th className="px-4 py-3 text-right">Gross Profit</th>
-                      <th className="px-4 py-3 text-right">Margin %</th>
+                      <th className="px-3.5 py-2.5">Product</th>
+                      <th className="px-3.5 py-2.5 text-right">Units Sold</th>
+                      <th className="px-3.5 py-2.5 text-right">Total Revenue</th>
+                      <th className="px-3.5 py-2.5 text-right">COGS</th>
+                      <th className="px-3.5 py-2.5 text-right">Gross Profit</th>
+                      <th className="px-3.5 py-2.5 text-right">Margin %</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 text-sm">
+                  <tbody className="divide-y divide-zinc-100 text-xs sm:text-sm">
                     {report.top_profitable_products.map((prod, idx) => {
                       const cost = prod.cost ?? 0;
                       const profit = prod.profit ?? prod.revenue - cost;
@@ -555,22 +610,22 @@ export default function ReportsPage() {
                           key={idx}
                           className="hover:bg-zinc-50 transition-colors"
                         >
-                          <td className="px-4 py-3 font-semibold text-zinc-900">
+                          <td className="px-3.5 py-3 font-semibold text-zinc-900">
                             {prod.product_name}
                           </td>
-                          <td className="px-4 py-3 text-right font-medium text-zinc-700">
+                          <td className="px-3.5 py-3 text-right font-medium text-zinc-700">
                             {prod.units_sold}
                           </td>
-                          <td className="px-4 py-3 text-right font-medium text-zinc-900">
+                          <td className="px-3.5 py-3 text-right font-medium text-zinc-900">
                             GH₵{prod.revenue.toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 text-right text-zinc-500">
+                          <td className="px-3.5 py-3 text-right text-zinc-500">
                             GH₵{cost.toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 text-right font-bold text-emerald-600">
+                          <td className="px-3.5 py-3 text-right font-bold text-emerald-600">
                             GH₵{profit.toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-3.5 py-3 text-right">
                             <span
                               className={cn(
                                 "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold",
