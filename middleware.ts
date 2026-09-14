@@ -15,12 +15,14 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/", req.url))
   }
 
-  // Block workers from admin routes
-  if (pathname.startsWith("/dashboard/admin") && role !== "admin" && role !== "super_admin") {
+  const isAdminRole = ["admin", "super_admin", "owner", "manager"].includes(role || "")
+
+  // Block non-admin staff from admin routes
+  if (pathname.startsWith("/dashboard/admin") && !isAdminRole) {
     return NextResponse.redirect(new URL("/dashboard/worker", req.url))
   }
 
-  // Block regular admins from super_admin-only routes
+  // Block non-super_admin from super_admin-only routes
   const superAdminOnlyRoutes = ["/dashboard/admin/register", "/dashboard/admin/shops"]
   if (superAdminOnlyRoutes.some((r) => pathname.startsWith(r)) && role !== "super_admin") {
     return NextResponse.redirect(new URL("/dashboard/admin", req.url))

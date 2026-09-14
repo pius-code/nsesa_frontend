@@ -8,7 +8,11 @@ export default async function Home() {
     redirect("/login")
   }
 
-  if (session.user.worker_role === "admin") {
+  const isAdminRole = ["admin", "super_admin", "owner", "manager"].includes(
+    session.user.worker_role || ""
+  )
+
+  if (isAdminRole) {
     redirect("/dashboard/admin")
   } else {
     redirect("/dashboard/worker")

@@ -10,11 +10,7 @@ export async function loginAction(formData: FormData) {
   const worker_email = formData.get("worker_email") as string
   const worker_password = formData.get("worker_password") as string
 
-  // NextAuth's credentials flow deliberately hides the real reason behind a
-  // generic "invalid credentials" error for security. That's fine for wrong
-  // passwords, but it also hides messages we DO want shown verbatim — e.g.
-  // "Your shop has been suspended." — so we pre-check directly against the
-  // backend first and surface its exact detail before ever calling signIn(). // noqa
+  // Precheck directly against the backend
   const precheck = await fetch(`${API_URL}/api/v1/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -23,7 +19,7 @@ export async function loginAction(formData: FormData) {
 
   if (!precheck.ok) {
     const data = await precheck.json().catch(() => null)
-    return { error: data?.detail || "Invalid email or password. Please try again." } // noqa
+    return { error: data?.detail || "Invalid email or password. Please try again." }
   }
 
   try {
@@ -40,7 +36,11 @@ export async function loginAction(formData: FormData) {
   }
 
   const session = await auth()
-  if (session?.user?.worker_role === "admin" || session?.user?.worker_role === "super_admin") { // noqa
+  const isAdminRole = ["admin", "super_admin", "owner", "manager"].includes(
+    session?.user?.worker_role || ""
+  )
+
+  if (isAdminRole) {
     redirect("/dashboard/admin")
   } else {
     redirect("/dashboard/worker")
