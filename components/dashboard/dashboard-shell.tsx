@@ -44,6 +44,7 @@ function getNavItems(role: string): NavItem[] {
     },
     { label: "Inventory", href: "/dashboard/worker/inventory", icon: Package },
     { label: "Clients", href: "/dashboard/worker/clients", icon: Contact },
+    { label: "Send SMS", href: "/dashboard/worker/broadcast", icon: Megaphone },
   ];
   const adminItems: NavItem[] = [
     { label: "Overview", href: "/dashboard/admin", icon: LayoutDashboard },

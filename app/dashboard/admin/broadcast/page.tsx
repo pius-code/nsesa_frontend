@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   Megaphone,
+  Store,
   Users,
   Loader2,
   Send,
@@ -40,15 +41,33 @@ interface RecipientResponse {
   recipients?: Recipient[];
 }
 
-function useRecipientCount(target: Target) {
+interface BranchOption {
+  id: string;
+  branch_name: string;
+  is_main: boolean;
+}
+
+function useBranches() {
+  return useQuery<BranchOption[]>({
+    queryKey: ["branches"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/branches");
+      return data;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+function useRecipientCount(target: Target, branchName?: string) {
   return useQuery<RecipientResponse>({
-    queryKey: ["broadcast-recipients-count", target],
+    queryKey: ["broadcast-recipients-count", target, branchName],
     queryFn: async () => {
       const url =
         target === "customers"
           ? "/api/v1/broadcast/recipients-count"
           : "/api/v1/broadcast/shop-admins/recipients-count";
-      const { data } = await api.get(url);
+      const params = branchName && branchName !== "all" ? { branch_name: branchName } : {};
+      const { data } = await api.get(url, { params });
       return data;
     },
     staleTime: 5 * 60 * 1000,
@@ -96,7 +115,9 @@ export default function BroadcastPage() {
   const isSuperAdmin = session?.user?.worker_role === "super_admin";
 
   const [target, setTarget] = useState<Target>("customers");
-  const { data, isLoading } = useRecipientCount(target);
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const { data: branches = [] } = useBranches();
+  const { data, isLoading } = useRecipientCount(target, selectedBranch);
   const recipientCount = data?.recipient_count ?? 0;
   const recipients = data?.recipients ?? [];
 
@@ -122,7 +143,11 @@ export default function BroadcastPage() {
         target === "customers"
           ? "/api/v1/broadcast/sms"
           : "/api/v1/broadcast/shop-admins/sms";
-      const { data } = await api.post(url, { message: message.trim() });
+      const payload: { message: string; branch_name?: string } = { message: message.trim() };
+      if (target === "customers" && selectedBranch !== "all") {
+        payload.branch_name = selectedBranch;
+      }
+      const { data } = await api.post(url, payload);
       return data;
     },
     onSuccess: (data) => {
@@ -194,6 +219,30 @@ export default function BroadcastPage() {
                 <ShieldCheck className="h-4 w-4" />
                 Shop Admins
               </button>
+            </div>
+          )}
+
+          {target === "customers" && branches.length > 0 && (
+            <div className="bg-white p-3.5 rounded-2xl border border-zinc-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Store className="h-4 w-4 text-green-700 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-zinc-800">Target Audience Branch</p>
+                  <p className="text-[11px] text-zinc-500">Send to all customers or a specific branch</p>
+                </div>
+              </div>
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="h-9 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-600/10 cursor-pointer"
+              >
+                <option value="all">All Shop Customers (Global)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.branch_name}>
+                    {b.branch_name} Customers Only {b.is_main ? "(Main)" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
