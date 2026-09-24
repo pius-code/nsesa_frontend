@@ -18,6 +18,8 @@ import {
   Clock,
   Megaphone,
   TrendingUp,
+  Wallet,
+  Store,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -40,6 +42,7 @@ function getNavItems(role: string): NavItem[] {
       href: "/dashboard/worker/transactions",
       icon: ClipboardList,
     },
+    { label: "Inventory", href: "/dashboard/worker/inventory", icon: Package },
     { label: "Clients", href: "/dashboard/worker/clients", icon: Contact },
   ];
   const adminItems: NavItem[] = [
@@ -53,6 +56,11 @@ function getNavItems(role: string): NavItem[] {
       icon: ClipboardList,
     },
     {
+      label: "Expenses",
+      href: "/dashboard/admin/expenses",
+      icon: Wallet,
+    },
+    {
       label: "Financial Reports",
       href: "/dashboard/admin/reports",
       icon: TrendingUp,
@@ -60,6 +68,7 @@ function getNavItems(role: string): NavItem[] {
     { label: "Categories", href: "/dashboard/admin/categories", icon: Tags },
     { label: "Clients", href: "/dashboard/admin/clients", icon: Contact },
     { label: "Send SMS", href: "/dashboard/admin/broadcast", icon: Megaphone },
+    { label: "Branches", href: "/dashboard/admin/branches", icon: Store },
     { label: "Workers", href: "/dashboard/admin/workers", icon: Users },
   ];
   const superAdminItems: NavItem[] = [
@@ -116,7 +125,13 @@ function ShopIdentity({ session }: { session: Session }) {
           <p className="font-heading font-bold text-[15px] leading-tight truncate capitalize"> {/* noqa */}
             {shopName}
           </p>
-          <p className="text-[11px] text-green-200/70 tracking-wide">FJ Pay POS</p> {/* noqa */}
+          <p className="text-[11px] text-green-200/80 tracking-wide font-medium flex items-center gap-1">
+            {session.user.worker_branch_name ? (
+              <span className="truncate">{session.user.worker_branch_name}</span>
+            ) : (
+              <span>Main Branch</span>
+            )}
+          </p> {/* noqa */}
         </div>
       </div>
     </div>

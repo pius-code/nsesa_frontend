@@ -21,6 +21,24 @@ interface Worker {
   created_at: string
 }
 
+
+interface BranchOption {
+  id: string
+  branch_name: string
+  is_main: boolean
+}
+
+function useBranches() {
+  return useQuery<BranchOption[]>({
+    queryKey: ["branches"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/branches")
+      return data
+    },
+    staleTime: 60 * 1000,
+  })
+}
+
 function useWorkers() {
   return useQuery<Worker[]>({
     queryKey: ["workers"],
@@ -46,6 +64,8 @@ export default function WorkersPage() {
   const shopName = session?.user?.worker_shop_name ?? ""
 
   const { data: workers = [], isLoading, isError } = useWorkers()
+  const { data: branches = [] } = useBranches()
+  const [branchName, setBranchName] = useState("")
 
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState("")
@@ -60,6 +80,7 @@ export default function WorkersPage() {
       const { data } = await api.post("/api/v1/create_worker", {
         worker_name: name.trim(),
         worker_role: role,
+        worker_branch_name: branchName.trim() || null,
         worker_email: email.trim(),
         worker_phone: phone.trim() || null,
         worker_password: password,
@@ -71,6 +92,7 @@ export default function WorkersPage() {
       setSuccess(true)
       setName("")
       setRole("worker")
+      setBranchName("")
       setEmail("")
       setPhone("")
       setPassword("")
@@ -147,6 +169,23 @@ export default function WorkersPage() {
                 {session?.user?.worker_role === "super_admin" && (
                   <option value="super_admin">Super Admin</option>
                 )}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="worker_branch">Assigned Branch</Label>
+              <select
+                id="worker_branch"
+                value={branchName}
+                onChange={(e) => setBranchName(e.target.value)}
+                className="w-full h-10 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-600/10"
+              >
+                <option value="">Unassigned (All/General)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.branch_name}>
+                    {b.branch_name} {b.is_main ? "(Main Branch)" : ""}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -253,7 +292,15 @@ export default function WorkersPage() {
                         {w.worker_role === "super_admin" ? "Super Admin" : w.worker_role}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-zinc-500">{w.worker_branch_name}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-600">
+                      {w.worker_branch_name ? (
+                        <span className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
+                          {w.worker_branch_name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-zinc-400 italic">None</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-zinc-500 whitespace-nowrap">{formatDate(w.created_at)}</td>
                     <td className="px-4 py-3">
                       <span className={cn(

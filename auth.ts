@@ -34,6 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             worker_role: data.worker.worker_role,
             worker_name: data.worker.worker_name,
             worker_shop_name: data.worker.worker_shop_name,
+            worker_branch_name: data.worker.worker_branch_name ?? null,
             worker_shop_image: data.worker.worker_shop_image,
           };
         } catch {
@@ -50,6 +51,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.worker_role = user.worker_role;
         token.worker_name = user.worker_name;
         token.worker_shop_name = user.worker_shop_name;
+        token.worker_branch_name = user.worker_branch_name ?? null;
         token.worker_shop_image = user.worker_shop_image;
       }
       return token;
@@ -60,6 +62,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.worker_role = token.worker_role as string;
       session.user.worker_name = token.worker_name as string;
       session.user.worker_shop_name = token.worker_shop_name as string;
+      session.user.worker_branch_name = (token.worker_branch_name as string) ?? null;
       session.user.worker_shop_image = token.worker_shop_image as string;
       return session;
     },

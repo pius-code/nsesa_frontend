@@ -13,6 +13,7 @@ import {
   Trash2,
   Upload,
   Download,
+  Store,
 } from "lucide-react"
 import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -27,6 +28,7 @@ interface InventoryItem {
   amount_available: number
   is_available: boolean
   sku: string | null
+  branch_name?: string | null
   category_id: string | null
   category_name: string | null
   cost_price?: number | null
@@ -53,11 +55,29 @@ interface BulkImportResponse {
   results: BulkImportRowResult[]
 }
 
-function useInventory() {
-  return useQuery<InventoryItem[]>({
-    queryKey: ["inventory"],
+interface BranchOption {
+  id: string
+  branch_name: string
+  is_main: boolean
+}
+
+function useBranches() {
+  return useQuery<BranchOption[]>({
+    queryKey: ["branches"],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory")
+      const { data } = await api.get("/api/v1/branches")
+      return data
+    },
+    staleTime: 60 * 1000,
+  })
+}
+
+function useInventory(branchName?: string) {
+  return useQuery<InventoryItem[]>({
+    queryKey: ["inventory", branchName],
+    queryFn: async () => {
+      const params = branchName && branchName !== "all" ? { branch_name: branchName } : {}
+      const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory", { params })
       return data
     },
     staleTime: 5 * 60 * 1000,
@@ -108,10 +128,13 @@ function CategorySelect({
 
 export default function InventoryPage() {
   const queryClient = useQueryClient()
-  const { data: inventory = [], isLoading, isError } = useInventory()
+  const [selectedBranch, setSelectedBranch] = useState<string>("all")
+  const { data: inventory = [], isLoading, isError } = useInventory(selectedBranch)
   const { data: categories = [] } = useCategories()
+  const { data: branches = [] } = useBranches()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [branchName, setBranchName] = useState("")
   const [productName, setProductName] = useState("")
   const [productPrice, setProductPrice] = useState("")
   const [costPrice, setCostPrice] = useState("")
@@ -161,6 +184,7 @@ export default function InventoryPage() {
         cost_price: costPrice ? parseFloat(costPrice) : null,
         amount_available: parseInt(amountAvailable),
         sku: sku.trim() || null,
+        branch_name: branchName.trim() || null,
         category_id: categoryId || null,
         supplier_name: supplierName.trim() || null,
         supplier_contact: supplierContact.trim() || null,
@@ -171,6 +195,7 @@ export default function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       setSuccess(true)
       setProductName("")
+      setBranchName("")
       setProductPrice("")
       setCostPrice("")
       setAmountAvailable("")
@@ -563,6 +588,7 @@ export default function InventoryPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Category</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Branch</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">Price</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">Cost Price</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Supplier</th>
