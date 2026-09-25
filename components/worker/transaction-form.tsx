@@ -199,6 +199,19 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
     setCart((prev) => prev.filter((c) => c.product_id !== productId))
   }
 
+  function updateCartQuantity(productId: string, newQty: number) {
+    const product = availableProducts.find((p) => p._id === productId)
+    const stockAvailable = product ? product.amount_available : Infinity
+    const clampedQty = Math.max(1, Math.min(newQty, stockAvailable))
+    setCart((prev) =>
+      prev.map((c) =>
+        c.product_id === productId
+          ? { ...c, quantity: clampedQty, subtotal: clampedQty * c.unit_price }
+          : c
+      )
+    )
+  }
+
   const total = cart.reduce((sum, c) => sum + c.subtotal, 0)
 
   const mutation = useMutation({
@@ -545,9 +558,24 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
               >
                 <Minus className="h-4 w-4" />
               </button>
-              <span className="w-10 text-center text-sm font-semibold text-zinc-800 select-none">
-                {qty}
-              </span>
+              <input
+                type="number"
+                min={1}
+                max={selectedProduct ? maxQty : undefined}
+                value={qty || ""}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10)
+                  if (isNaN(val) || val < 1) {
+                    setQty(1)
+                  } else if (selectedProduct && val > maxQty) {
+                    setQty(maxQty)
+                  } else {
+                    setQty(val)
+                  }
+                }}
+                onFocus={(e) => e.target.select()}
+                className="w-14 h-9 text-center text-sm font-semibold text-zinc-800 bg-white border-x border-zinc-200 outline-none focus:ring-1 focus:ring-green-600"
+              />
               <button
                 type="button"
                 onClick={incrementQty}
@@ -592,10 +620,38 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       {item.product_name}
                     </p>
                     <p className="text-xs text-zinc-500">
-                      GH₵{item.unit_price.toFixed(2)} × {item.quantity}
+                      GH₵{item.unit_price.toFixed(2)} each
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-zinc-800 shrink-0">
+                  <div className="flex items-center rounded-md border border-zinc-200 bg-white overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)}
+                      disabled={item.quantity <= 1}
+                      className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.quantity || ""}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10)
+                        updateCartQuantity(item.product_id, isNaN(val) ? 1 : val)
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      className="w-12 py-0.5 text-center text-xs font-semibold text-zinc-800 bg-transparent border-x border-zinc-200 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)}
+                      className="px-2 py-1 text-zinc-600 hover:bg-zinc-100"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <span className="text-sm font-semibold text-zinc-800 shrink-0 min-w-[4.5rem] text-right">
                     GH₵{item.subtotal.toFixed(2)}
                   </span>
                   <button
