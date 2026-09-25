@@ -557,14 +557,21 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             )
           })()}
 
-          {/* Raw Quantity input + Add to cart */}
+          {/* Quantity stepper with raw numeric input + Add to cart */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-24 shrink-0">
-              <Input
+            <div className="flex items-center h-10 rounded-lg border border-zinc-300 bg-white overflow-hidden shrink-0 shadow-xs focus-within:border-green-600 focus-within:ring-1 focus-within:ring-green-600">
+              <button
+                type="button"
+                onClick={decrementQty}
+                disabled={parsedQty <= 1}
+                className="h-full px-2.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors flex items-center justify-center"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="Qty"
                 value={qty}
                 onChange={(e) => {
                   const cleaned = e.target.value.replace(/[^0-9]/g, "")
@@ -579,8 +586,16 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   }
                 }}
                 onFocus={(e) => e.target.select()}
-                className="h-10 text-center text-base font-bold text-zinc-900 border-zinc-300 focus:border-green-600 focus:ring-green-600"
+                className="w-14 sm:w-16 h-full text-center text-sm font-bold text-zinc-900 bg-transparent border-x border-zinc-200 outline-none"
               />
+              <button
+                type="button"
+                onClick={incrementQty}
+                disabled={selectedProduct ? parsedQty >= maxQty : false}
+                className="h-full px-2.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors flex items-center justify-center"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
 
             <Button
