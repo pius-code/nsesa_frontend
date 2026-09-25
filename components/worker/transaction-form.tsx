@@ -72,7 +72,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
   const { data: inventory = [], isLoading: inventoryLoading } = useInventory()
 
   const [selectedProductId, setSelectedProductId] = useState("")
-  const [qty, setQty] = useState(1)
+  const [qty, setQty] = useState<string>("1")
   const [cart, setCart] = useState<CartItem[]>([])
 
   // TODO: For shops with >100 products, move product search to server-side (API endpoint with q= param)
@@ -146,35 +146,45 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
     ? selectedProduct.amount_available - (cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0)
     : Infinity
 
+  const parsedQty = Math.max(1, parseInt(String(qty), 10) || 1)
+
   function selectProduct(product: InventoryItem) {
     setSelectedProductId(product._id)
     setSearchQuery(product.product_name)
     setSearchOpen(false)
-    setQty(1)
+    setQty("1")
   }
 
   function clearProduct() {
     setSelectedProductId("")
     setSearchQuery("")
-    setQty(1)
+    setQty("1")
   }
 
   function incrementQty() {
-    setQty((q) => (selectedProduct ? Math.min(q + 1, maxQty) : q + 1))
+    setQty((q) => {
+      const current = parseInt(String(q), 10) || 0
+      const next = selectedProduct ? Math.min(current + 1, maxQty) : current + 1
+      return String(next)
+    })
   }
 
   function decrementQty() {
-    setQty((q) => Math.max(1, q - 1))
+    setQty((q) => {
+      const current = parseInt(String(q), 10) || 1
+      return String(Math.max(1, current - 1))
+    })
   }
 
   function addItem() {
-    if (!selectedProduct || qty < 1) return
+    if (!selectedProduct) return
+    const actualQty = Math.max(1, Math.min(parseInt(String(qty), 10) || 1, maxQty))
     const inCart = cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0
-    if (inCart + qty > selectedProduct.amount_available) return
+    if (inCart + actualQty > selectedProduct.amount_available) return
     setCart((prev) => {
       const existing = prev.find((c) => c.product_id === selectedProduct._id)
       if (existing) {
-        const newQty = existing.quantity + qty
+        const newQty = existing.quantity + actualQty
         return prev.map((c) =>
           c.product_id === selectedProduct._id
             ? { ...c, quantity: newQty, subtotal: newQty * c.unit_price }
@@ -187,8 +197,8 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           product_id: selectedProduct._id,
           product_name: selectedProduct.product_name,
           unit_price: selectedProduct.product_price,
-          quantity: qty,
-          subtotal: qty * selectedProduct.product_price,
+          quantity: actualQty,
+          subtotal: actualQty * selectedProduct.product_price,
         },
       ]
     })
@@ -202,11 +212,11 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
   function updateCartQuantity(productId: string, newQty: number) {
     const product = availableProducts.find((p) => p._id === productId)
     const stockAvailable = product ? product.amount_available : Infinity
-    const clampedQty = Math.max(1, Math.min(newQty, stockAvailable))
+    const clampedQty = newQty <= 0 ? 0 : Math.min(newQty, stockAvailable)
     setCart((prev) =>
       prev.map((c) =>
         c.product_id === productId
-          ? { ...c, quantity: clampedQty, subtotal: clampedQty * c.unit_price }
+          ? { ...c, quantity: clampedQty, subtotal: (clampedQty || 0) * c.unit_price }
           : c
       )
     )
@@ -532,7 +542,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           {selectedProduct && (() => {
             const inCart = cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0
             const remaining = selectedProduct.amount_available - inCart
-            const overLimit = qty > remaining
+            const overLimit = parsedQty > remaining
             return (
               <p className={`text-xs ${overLimit ? "text-red-500 font-medium" : "text-zinc-500"}`}>
                 {overLimit
@@ -540,60 +550,49 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   : `${selectedProduct.amount_available} in stock · subtotal: `}
                 {!overLimit && (
                   <span className="font-semibold text-green-600">
-                    GH₵{(selectedProduct.product_price * qty).toFixed(2)}
+                    GH₵{(selectedProduct.product_price * parsedQty).toFixed(2)}
                   </span>
                 )}
               </p>
             )
           })()}
 
-          {/* Quantity controls + Add to cart */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center rounded-lg border border-zinc-200 bg-zinc-50 overflow-hidden shrink-0">
-              <button
-                type="button"
-                onClick={decrementQty}
-                disabled={qty <= 1}
-                className="px-3 py-2 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <input
-                type="number"
-                min={1}
-                max={selectedProduct ? maxQty : undefined}
-                value={qty || ""}
+          {/* Raw Quantity input + Add to cart */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-24 shrink-0">
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Qty"
+                value={qty}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value, 10)
-                  if (isNaN(val) || val < 1) {
-                    setQty(1)
+                  const cleaned = e.target.value.replace(/[^0-9]/g, "")
+                  setQty(cleaned)
+                }}
+                onBlur={() => {
+                  const val = parseInt(qty, 10)
+                  if (!qty || isNaN(val) || val < 1) {
+                    setQty("1")
                   } else if (selectedProduct && val > maxQty) {
-                    setQty(maxQty)
-                  } else {
-                    setQty(val)
+                    setQty(String(maxQty))
                   }
                 }}
                 onFocus={(e) => e.target.select()}
-                className="w-14 h-9 text-center text-sm font-semibold text-zinc-800 bg-white border-x border-zinc-200 outline-none focus:ring-1 focus:ring-green-600"
+                className="h-10 text-center text-base font-bold text-zinc-900 border-zinc-300 focus:border-green-600 focus:ring-green-600"
               />
-              <button
-                type="button"
-                onClick={incrementQty}
-                disabled={selectedProduct ? qty >= maxQty : false}
-                className="px-3 py-2 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
             </div>
 
             <Button
               type="button"
               onClick={addItem}
               disabled={!selectedProductId}
-              className="flex-1 gap-2"
+              className="flex-1 h-10 gap-2"
             >
               <ShoppingCart className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">To cart</span>
+              <span className="text-xs sm:text-sm font-semibold">
+                To cart {selectedProduct && `· GH₵${(selectedProduct.product_price * parsedQty).toFixed(2)}`}
+              </span>
             </Button>
           </div>
         </div>
@@ -626,26 +625,33 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   <div className="flex items-center rounded-md border border-zinc-200 bg-white overflow-hidden shrink-0">
                     <button
                       type="button"
-                      onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)}
+                      onClick={() => updateCartQuantity(item.product_id, Math.max(1, (item.quantity || 1) - 1))}
                       disabled={item.quantity <= 1}
                       className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
                     <input
-                      type="number"
-                      min={1}
-                      value={item.quantity || ""}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={item.quantity === 0 ? "" : item.quantity}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value, 10)
-                        updateCartQuantity(item.product_id, isNaN(val) ? 1 : val)
+                        const cleaned = e.target.value.replace(/[^0-9]/g, "")
+                        const val = parseInt(cleaned, 10)
+                        updateCartQuantity(item.product_id, isNaN(val) ? 0 : val)
+                      }}
+                      onBlur={() => {
+                        if (!item.quantity || item.quantity < 1) {
+                          updateCartQuantity(item.product_id, 1)
+                        }
                       }}
                       onFocus={(e) => e.target.select()}
                       className="w-12 py-0.5 text-center text-xs font-semibold text-zinc-800 bg-transparent border-x border-zinc-200 outline-none"
                     />
                     <button
                       type="button"
-                      onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)}
+                      onClick={() => updateCartQuantity(item.product_id, (item.quantity || 0) + 1)}
                       className="px-2 py-1 text-zinc-600 hover:bg-zinc-100"
                     >
                       <Plus className="h-3 w-3" />
