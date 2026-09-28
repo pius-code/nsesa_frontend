@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Wallet,
   Store,
+  Settings,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,7 @@ function getNavItems(role: string): NavItem[] {
     { label: "Send SMS", href: "/dashboard/admin/broadcast", icon: Megaphone },
     { label: "Branches", href: "/dashboard/admin/branches", icon: Store },
     { label: "Workers", href: "/dashboard/admin/workers", icon: Users },
+    { label: "Settings", href: "/dashboard/admin/settings", icon: Settings },
   ];
   const superAdminItems: NavItem[] = [
     ...adminItems.filter((item) => ![

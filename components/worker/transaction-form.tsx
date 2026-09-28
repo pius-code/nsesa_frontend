@@ -9,6 +9,7 @@ import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { DateStripPicker } from "@/components/ui/date-strip-picker"
 
 interface InventoryItem {
   _id: string
@@ -32,6 +33,16 @@ interface Client {
   client_name: string
   client_phone: string | null
   client_email: string | null
+}
+
+function getLocalDatetimeString(date = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const year = date.getFullYear()
+  const month = pad(date.getMonth() + 1)
+  const day = pad(date.getDate())
+  const hours = pad(date.getHours())
+  const minutes = pad(date.getMinutes())
+  return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
 function useInventory() {
@@ -75,7 +86,6 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
   const [qty, setQty] = useState<string>("1")
   const [cart, setCart] = useState<CartItem[]>([])
 
-  // TODO: For shops with >100 products, move product search to server-side (API endpoint with q= param)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -83,8 +93,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
   const [customerName, setCustomerName] = useState("")
   const [customerNumber, setCustomerNumber] = useState("")
   const [note, setNote] = useState("")
+  const [transactionDate, setTransactionDate] = useState(() => getLocalDatetimeString())
   const [sendSms, setSendSms] = useState(true)
-  const [paymentMode, setPaymentMode] = useState<"cash" | "momo" | "card" | "pay_later">("cash") // noqa
+  const [paymentMode, setPaymentMode] = useState<"cash" | "momo" | "card" | "pay_later">("cash")
   const payLater = paymentMode === "pay_later"
 
   const [clientId, setClientId] = useState<string | null>(null)
@@ -130,10 +141,8 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
     },
   })
 
-
   const availableProducts = inventory.filter((p) => p.is_available)
 
-  // TODO: For shops with >100 products, move product search to server-side (API endpoint with q= param)
   const filteredProducts = searchQuery.trim()
     ? availableProducts.filter((p) =>
         p.product_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -235,6 +244,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
         payment_mode: payLater ? null : paymentMode,
         processed_by: workerName,
         processed_by_id: workerId ?? null,
+        created_at: transactionDate ? new Date(transactionDate).toISOString() : null,
         send_sms: payLater ? false : sendSms,
         pay_later: payLater,
         note: note.trim() || null,
@@ -244,16 +254,16 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      toast.success(payLater ? "Order saved as pending!" : "Transaction recorded successfully!") // noqa
+      toast.success(payLater ? "Order saved as pending!" : "Transaction recorded successfully!")
       setCart([])
       setCustomerName("")
       setCustomerNumber("")
       setNote("")
+      setTransactionDate(getLocalDatetimeString())
       clearClient()
       clearProduct()
     },
     onError: (err: unknown) => {
-      // Re-fetch inventory so the worker sees current stock (e.g. another worker just sold the last units)
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -270,7 +280,6 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
         <p className="text-sm text-zinc-500 mt-0.5">Fill in customer details and add products</p>
       </div>
 
-
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -280,7 +289,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
       >
         {/* Customer details */}
         <div className="px-5 py-5 space-y-4">
-          <p className="text-sm font-semibold text-zinc-700">Customer Details</p>
+          <p className="text-sm font-semibold text-zinc-700">Customer & Sale Details</p>
 
           {/* Registered client search */}
           <div className="space-y-1.5">
@@ -297,7 +306,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
                 <Input
-                  placeholder="Search by name or phone…"
+                  placeholder="Search by name or phone..."
                   value={clientQuery}
                   onChange={(e) => {
                     setClientQuery(e.target.value)
@@ -312,7 +321,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                     {clientSearching ? (
                       <p className="px-3 py-2.5 text-sm text-zinc-400 flex items-center gap-2">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Searching…
+                        Searching...
                       </p>
                     ) : clientResults.length === 0 ? (
                       <p className="px-3 py-2.5 text-sm text-zinc-400">No matching clients</p>
@@ -406,6 +415,15 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             </div>
           </div>
 
+          {/* Sleek Date Strip Picker */}
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-zinc-700 font-semibold">Transaction Date</Label>
+            <DateStripPicker
+              value={transactionDate}
+              onChange={(newDate) => setTransactionDate(newDate)}
+            />
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="note">Note (optional)</Label>
             <Input
@@ -424,21 +442,21 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   key={mode}
                   type="button"
                   onClick={() => setPaymentMode(mode)}
-                  className={`py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${
+                  className={`py-2 rounded-lg text-sm font-medium border transition-colors capitalize cursor-pointer ${
                     paymentMode === mode
                       ? mode === "pay_later"
-                        ? "bg-amber-500 border-amber-500 text-white"
-                        : "bg-green-600 border-green-600 text-white"
+                        ? "bg-amber-500 border-amber-500 text-white shadow-xs"
+                        : "bg-green-600 border-green-600 text-white shadow-xs"
                       : "bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50"
                   }`}
                 >
-                  {mode === "momo" ? "MoMo" : mode === "pay_later" ? "Pay Later" : mode.charAt(0).toUpperCase() + mode.slice(1)} {/* noqa */}
+                  {mode === "momo" ? "MoMo" : mode === "pay_later" ? "Pay Later" : mode.charAt(0).toUpperCase() + mode.slice(1)}
                 </button>
               ))}
             </div>
             {payLater && (
               <p className="text-xs text-amber-600">
-                Saved as a pending order — no payment or receipt yet. Complete it later from Pending Orders. {/* noqa */}
+                Saved as a pending order — no payment or receipt yet. Complete it later from Pending Orders.
               </p>
             )}
           </div>
@@ -460,11 +478,10 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
         <div className="px-5 py-5 space-y-3">
           <p className="text-sm font-semibold text-zinc-700">Add Products</p>
 
-          {/* Search / autocomplete */}
           <div ref={searchRef} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
             <Input
-              placeholder={inventoryLoading ? "Loading products…" : "Search products…"}
+              placeholder={inventoryLoading ? "Loading products..." : "Search products..."}
               value={searchQuery}
               disabled={inventoryLoading}
               onChange={(e) => {
@@ -479,7 +496,6 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             {searchQuery && (
               <button
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
                 onClick={clearProduct}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
               >
@@ -487,9 +503,8 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
               </button>
             )}
 
-            {/* Results dropdown */}
-            {searchOpen && !inventoryLoading && (
-              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+            {searchOpen && searchQuery.trim() && (
+              <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
                 {filteredProducts.length === 0 ? (
                   <p className="px-3 py-2.5 text-sm text-zinc-400">No products found</p>
                 ) : (
@@ -501,42 +516,22 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       onClick={() => selectProduct(p)}
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-zinc-50 transition-colors text-left"
                     >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-medium text-zinc-800 truncate">{p.product_name}</span>
+                      <div>
+                        <span className="font-medium text-zinc-800">{p.product_name}</span>
                         {p.category_name && (
-                          <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
-                            {p.category_name}
-                          </span>
+                          <span className="ml-2 text-xs text-zinc-400">{p.category_name}</span>
                         )}
-                      </span>
-                      <span className="text-zinc-500 text-xs shrink-0 ml-2">
-                        GH₵{p.product_price.toFixed(2)} · {p.amount_available} in stock
-                      </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-semibold text-green-600">GH₵{p.product_price.toFixed(2)}</span>
+                        <span className="block text-[11px] text-zinc-400">{p.amount_available} in stock</span>
+                      </div>
                     </button>
                   ))
                 )}
               </div>
             )}
           </div>
-
-          {/* Selected product chip */}
-          {selectedProduct && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
-              <span className="flex-1 flex items-center gap-1.5 min-w-0">
-                <span className="text-sm font-medium text-green-800 truncate">
-                  {selectedProduct.product_name}
-                </span>
-                {selectedProduct.category_name && (
-                  <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
-                    {selectedProduct.category_name}
-                  </span>
-                )}
-              </span>
-              <span className="text-xs text-green-600 shrink-0">
-                GH₵{selectedProduct.product_price.toFixed(2)}
-              </span>
-            </div>
-          )}
 
           {/* Stock hint */}
           {selectedProduct && (() => {
@@ -547,7 +542,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
               <p className={`text-xs ${overLimit ? "text-red-500 font-medium" : "text-zinc-500"}`}>
                 {overLimit
                   ? `Only ${remaining} available (${inCart} already in cart)`
-                  : `${selectedProduct.amount_available} in stock · subtotal: `}
+                  : `${selectedProduct.amount_available} in stock • subtotal: `}
                 {!overLimit && (
                   <span className="font-semibold text-green-600">
                     GH₵{(selectedProduct.product_price * parsedQty).toFixed(2)}
@@ -564,7 +559,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                 type="button"
                 onClick={decrementQty}
                 disabled={parsedQty <= 1}
-                className="h-full px-2.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors flex items-center justify-center"
+                className="h-full px-2.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors flex items-center justify-center cursor-pointer"
               >
                 <Minus className="h-4 w-4" />
               </button>
@@ -592,7 +587,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                 type="button"
                 onClick={incrementQty}
                 disabled={selectedProduct ? parsedQty >= maxQty : false}
-                className="h-full px-2.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors flex items-center justify-center"
+                className="h-full px-2.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 transition-colors flex items-center justify-center cursor-pointer"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -602,11 +597,11 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
               type="button"
               onClick={addItem}
               disabled={!selectedProductId}
-              className="flex-1 h-10 gap-2"
+              className="flex-1 h-10 gap-2 cursor-pointer"
             >
               <ShoppingCart className="h-4 w-4" />
               <span className="text-xs sm:text-sm font-semibold">
-                To cart {selectedProduct && `· GH₵${(selectedProduct.product_price * parsedQty).toFixed(2)}`}
+                To cart {selectedProduct && `• GH₵${(selectedProduct.product_price * parsedQty).toFixed(2)}`}
               </span>
             </Button>
           </div>
@@ -642,7 +637,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       type="button"
                       onClick={() => updateCartQuantity(item.product_id, Math.max(1, (item.quantity || 1) - 1))}
                       disabled={item.quantity <= 1}
-                      className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30"
+                      className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
@@ -667,7 +662,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                     <button
                       type="button"
                       onClick={() => updateCartQuantity(item.product_id, (item.quantity || 0) + 1)}
-                      className="px-2 py-1 text-zinc-600 hover:bg-zinc-100"
+                      className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 cursor-pointer"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
@@ -678,7 +673,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   <button
                     type="button"
                     onClick={() => removeItem(item.product_id)}
-                    className="text-zinc-400 hover:text-red-500 transition-colors shrink-0"
+                    className="text-zinc-400 hover:text-red-500 transition-colors shrink-0 cursor-pointer"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -700,16 +695,16 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           <Button
             type="submit"
             size="lg"
-            className={payLater ? "w-full bg-amber-500 hover:bg-amber-600" : "w-full"} // noqa
+            className={payLater ? "w-full bg-amber-500 hover:bg-amber-600 cursor-pointer" : "w-full cursor-pointer"}
             disabled={!canSubmit}
           >
             {mutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Processing…
+                Processing...
               </>
             ) : (
-              `${payLater ? "Save as Pending" : "Record Transaction"}${cart.length > 0 ? ` · GH₵${total.toFixed(2)}` : ""}` // noqa
+              `${payLater ? "Save as Pending" : "Record Transaction"}${cart.length > 0 ? ` • GH₵${total.toFixed(2)}` : ""}`
             )}
           </Button>
           {cart.length === 0 && (
