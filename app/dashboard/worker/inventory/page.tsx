@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Search,
   CheckCircle2,
+  ShieldAlert,
 } from "lucide-react"
 import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,10 @@ function errorMessage(err: unknown, fallback: string) {
 export default function WorkerInventoryPage() {
   const queryClient = useQueryClient()
   const { data: session } = useSession()
+  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>
+  const canAddInventory = !!perms.can_add_inventory
+  const canUpdateStock = !!perms.can_update_stock
+
   const branchName = session?.user?.worker_branch_name || "Main Branch"
   const shopName = session?.user?.worker_shop_name || ""
 
@@ -72,6 +77,7 @@ export default function WorkerInventoryPage() {
       const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory")
       return data
     },
+    enabled: canAddInventory || canUpdateStock,
     staleTime: 60 * 1000,
   })
 
@@ -139,6 +145,18 @@ export default function WorkerInventoryPage() {
 
   const totalStockUnits = inventory.reduce((acc, item) => acc + (item.amount_available || 0), 0)
   const lowStockCount = inventory.filter((item) => item.amount_available < LOW_STOCK_THRESHOLD).length
+
+  if (!canAddInventory && !canUpdateStock) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-white py-16 text-center">
+        <ShieldAlert className="h-10 w-10 text-amber-500 mb-3" />
+        <p className="text-base font-semibold text-zinc-800">Access Restricted</p>
+        <p className="text-xs text-zinc-500 mt-1 max-w-sm">
+          You don&apos;t have permission to manage or restock inventory. Please contact your store administrator.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">

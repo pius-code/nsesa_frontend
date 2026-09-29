@@ -1,9 +1,10 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
-import { CheckCircle2, Loader2, Users, Plus, Pencil, Check, X, Trash2, Search } from "lucide-react"
+import { Loader2, Users, Plus, Pencil, Check, X, Trash2, Search, ShieldAlert } from "lucide-react"
+import { toast } from "sonner"
 import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +27,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced
 }
 
-function useClients(query: string) {
+function useClients(query: string, enabled: boolean) {
   const debouncedQuery = useDebouncedValue(query.trim(), 300)
   return useQuery<Client[]>({
     queryKey: ["clients", debouncedQuery],
@@ -34,6 +35,7 @@ function useClients(query: string) {
       const { data } = await api.get("/api/v1/clients", { params: { q: debouncedQuery || undefined, limit: 100 } })
       return data
     },
+    enabled,
     staleTime: 60 * 1000,
   })
 }
@@ -41,16 +43,24 @@ function useClients(query: string) {
 export function ClientsList() {
   const queryClient = useQueryClient()
   const { data: session } = useSession()
-  const canManage = session?.user?.worker_role === "admin" || session?.user?.worker_role === "super_admin"
+
+  const role = session?.user?.worker_role
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const perms = ((session?.user as any)?.permissions || {}) as Record<string, boolean>
+  const isAdmin = role === "admin" || role === "super_admin"
+
+  const canSee = isAdmin || !!perms.can_see_clients
+  const canAdd = isAdmin || !!perms.can_add_clients
+  const canEdit = isAdmin || !!perms.can_edit_clients
+  const canDelete = isAdmin
 
   const [search, setSearch] = useState("")
-  const { data: clients = [], isLoading, isError } = useClients(search)
+  const { data: clients = [], isLoading, isError } = useClients(search, canSee)
 
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
-  const [success, setSuccess] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
@@ -81,12 +91,15 @@ export function ClientsList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] })
-      setSuccess(true)
+      toast.success("Client added successfully!")
       setName("")
       setPhone("")
       setEmail("")
       setShowForm(false)
-      setTimeout(() => setSuccess(false), 4000)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || "Failed to add client. Phone number may already be registered."
+      toast.error(msg)
     },
   })
 
@@ -101,7 +114,12 @@ export function ClientsList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] })
+      toast.success("Client updated successfully!")
       cancelEdit()
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || "Failed to update client."
+      toast.error(msg)
     },
   })
 
@@ -112,9 +130,26 @@ export function ClientsList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] })
+      toast.success("Client deleted.")
       setDeletingId(null)
     },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || "Failed to delete client."
+      toast.error(msg)
+    },
   })
+
+  if (!canSee) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-white py-16 text-center">
+        <ShieldAlert className="h-10 w-10 text-amber-500 mb-3" />
+        <p className="text-base font-semibold text-zinc-800">Access Restricted</p>
+        <p className="text-xs text-zinc-500 mt-1 max-w-sm">
+          You don&apos;t have permission to view clients. Contact your administrator if you need access.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -125,28 +160,23 @@ export function ClientsList() {
             {clients.length} client{clients.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "default"}>
-          <Plus className="h-4 w-4" />
-          Add Client
-        </Button>
+        {canAdd && (
+          <Button onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "default"}>
+            <Plus className="h-4 w-4" />
+            Add Client
+          </Button>
+        )}
       </div>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
         <Input
-          placeholder="Search by name or phone…"
+          placeholder="Search by name or phone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
         />
       </div>
-
-      {success && (
-        <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-700 text-sm font-medium">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Client added!
-        </div>
-      )}
 
       {showForm && (
         <form
@@ -157,12 +187,6 @@ export function ClientsList() {
           className="bg-white rounded-xl border border-zinc-200 shadow-sm px-5 py-5 space-y-4"
         >
           <p className="text-sm font-semibold text-zinc-700">New Client</p>
-
-          {addMutation.isError && (
-            <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 text-red-600 text-sm">
-              Failed to add client. Phone number may already be registered.
-            </div>
-          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="client_name">
@@ -186,7 +210,7 @@ export function ClientsList() {
               {addMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving…
+                  Saving...
                 </>
               ) : (
                 "Add Client"
@@ -202,7 +226,7 @@ export function ClientsList() {
       {isLoading ? (
         <div className="flex items-center justify-center py-20 gap-2 text-zinc-400 text-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading clients…
+          Loading clients...
         </div>
       ) : isError ? (
         <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-red-600 text-sm">
@@ -212,7 +236,7 @@ export function ClientsList() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white py-20 text-center">
           <Users className="h-10 w-10 text-zinc-300 mb-3" />
           <p className="text-sm font-medium text-zinc-500">No clients yet</p>
-          <p className="text-xs text-zinc-400 mt-1">Add your first client above</p>
+          {canAdd && <p className="text-xs text-zinc-400 mt-1">Add your first client above</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -269,21 +293,27 @@ export function ClientsList() {
                         {[client.client_phone, client.client_email].filter(Boolean).join(" · ") || "No contact info"}
                       </p>
                     </div>
-                    {canManage && (
+                    {(canEdit || canDelete) && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => startEdit(client)}
-                          className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingId(client.id)}
-                          disabled={isDeleting}
-                          className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors"
-                        >
-                          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => startEdit(client)}
+                            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+                            title="Edit client"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeletingId(client.id)}
+                            disabled={isDeleting}
+                            className="p-1.5 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                            title="Delete client"
+                          >
+                            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

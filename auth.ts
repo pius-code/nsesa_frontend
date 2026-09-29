@@ -32,10 +32,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             accessToken: data.access_token,
             worker_id: data.worker.id,
             worker_role: data.worker.worker_role,
+            role_label: data.worker.role_label ?? "",
             worker_name: data.worker.worker_name,
             worker_shop_name: data.worker.worker_shop_name,
             worker_branch_name: data.worker.worker_branch_name ?? null,
             worker_shop_image: data.worker.worker_shop_image,
+            permissions: data.worker.permissions ?? {},
           };
         } catch {
           return null;
@@ -49,10 +51,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.accessToken = user.accessToken;
         token.worker_id = user.worker_id;
         token.worker_role = user.worker_role;
+        token.role_label = user.role_label;
         token.worker_name = user.worker_name;
         token.worker_shop_name = user.worker_shop_name;
         token.worker_branch_name = user.worker_branch_name ?? null;
         token.worker_shop_image = user.worker_shop_image;
+        token.permissions = user.permissions;
       }
       return token;
     },
@@ -60,10 +64,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.accessToken = token.accessToken as string;
       session.user.worker_id = token.worker_id as string;
       session.user.worker_role = token.worker_role as string;
+      session.user.role_label = (token.role_label as string) ?? "";
       session.user.worker_name = token.worker_name as string;
       session.user.worker_shop_name = token.worker_shop_name as string;
       session.user.worker_branch_name = (token.worker_branch_name as string) ?? null;
       session.user.worker_shop_image = token.worker_shop_image as string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      session.user.permissions = (token.permissions as any) ?? {};
       return session;
     },
   },

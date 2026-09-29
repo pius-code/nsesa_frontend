@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,7 @@ import {
   Info,
   Clock,
   Store,
+  ShieldAlert,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { Button } from "@/components/ui/button";
@@ -39,13 +40,14 @@ interface RecipientResponse {
   recipients?: Recipient[];
 }
 
-function useBranchRecipientCount() {
+function useBranchRecipientCount(enabled: boolean) {
   return useQuery<RecipientResponse>({
     queryKey: ["worker-broadcast-recipients-count"],
     queryFn: async () => {
       const { data } = await api.get("/api/v1/broadcast/recipients-count");
       return data;
     },
+    enabled,
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -88,6 +90,10 @@ function getAvatarColor(name: string): string {
 export default function WorkerBroadcastPage() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
+  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>;
+  const isAdmin = ["admin", "super_admin", "owner", "manager"].includes(session?.user?.worker_role || "");
+  const canSms = isAdmin || !!perms.can_sms_own_branch || !!perms.can_sms_all_branches;
+
   const branchName = session?.user?.worker_branch_name || "Main Branch";
   const shopName = session?.user?.worker_shop_name || "";
 
@@ -95,7 +101,7 @@ export default function WorkerBroadcastPage() {
   const [search, setSearch] = useState("");
   const [confirming, setConfirming] = useState(false);
 
-  const { data: countData, isLoading: countLoading } = useBranchRecipientCount();
+  const { data: countData, isLoading: countLoading } = useBranchRecipientCount(canSms);
   const recipientCount = countData?.recipient_count ?? 0;
   const recipients = countData?.recipients ?? [];
 

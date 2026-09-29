@@ -1,8 +1,9 @@
-"use client"
+﻿"use client"
 
 import { SessionProvider } from "next-auth/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useState } from "react"
+import { Toaster } from "sonner"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -10,13 +11,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000, // 5 minutes
+            staleTime: 5 * 60 * 1000,
             retry: (failureCount, error) => {
-              // A 401 will never succeed on retry — retrying just delays the
-              // redirect to /login that lib/axios.ts's interceptor triggers.
-              const status = (error as { response?: { status?: number } })?.response?.status; // noqa
-              if (status === 401) return false;
-              return failureCount < 1;
+              const status = (error as { response?: { status?: number } })?.response?.status
+              if (status === 401) return false
+              return failureCount < 1
             },
           },
         },
@@ -25,7 +24,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toaster position="top-right" richColors closeButton />
+      </QueryClientProvider>
     </SessionProvider>
   )
 }
