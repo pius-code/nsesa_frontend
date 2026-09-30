@@ -90,6 +90,9 @@ function getNavItems(session: Session["user"]): NavItem[] {
   if (perms.can_see_clients) {
     items.push({ label: "Clients", href: "/dashboard/worker/clients", icon: Contact });
   }
+  if (perms.can_manage_expenses) {
+    items.push({ label: "Expenses", href: "/dashboard/worker/expenses", icon: Wallet });
+  }
   if (perms.can_sms_own_branch || perms.can_sms_all_branches) {
     items.push({ label: "Send SMS", href: "/dashboard/worker/broadcast", icon: Megaphone });
   }

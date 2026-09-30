@@ -7,6 +7,7 @@ function getFirstAllowedWorkerRoute(perms: Record<string, boolean>): string {
   if (perms.view_own_transactions || perms.view_all_transactions) return "/dashboard/worker/transactions"
   if (perms.can_add_inventory || perms.can_update_stock) return "/dashboard/worker/inventory"
   if (perms.can_see_clients) return "/dashboard/worker/clients"
+  if (perms.can_manage_expenses) return "/dashboard/worker/expenses"
   if (perms.can_sms_own_branch || perms.can_sms_all_branches) return "/dashboard/worker/broadcast"
   return "/dashboard/unauthorized"
 }
@@ -72,6 +73,12 @@ export default auth((req) => {
     // 5. Broadcast (SMS) route
     else if (pathname.startsWith("/dashboard/worker/broadcast")) {
       if (!perms.can_sms_own_branch && !perms.can_sms_all_branches) {
+        return NextResponse.redirect(new URL(getFirstAllowedWorkerRoute(perms), req.url))
+      }
+    }
+    // 6. Expenses route
+    else if (pathname.startsWith("/dashboard/worker/expenses")) {
+      if (!perms.can_manage_expenses) {
         return NextResponse.redirect(new URL(getFirstAllowedWorkerRoute(perms), req.url))
       }
     }
