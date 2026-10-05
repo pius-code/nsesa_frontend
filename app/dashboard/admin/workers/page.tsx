@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
 import {
@@ -15,13 +15,16 @@ import {
   Shield,
   ChevronDown,
   ChevronUp,
+  KeyRound,
+  MoreHorizontal,
 } from "lucide-react"
 import { toast } from "sonner"
 import api from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { cn } from "@/lib/utils"
+import { cn, getErrorMessage } from "@/lib/utils"
+import { generateStrongPassword, validatePassword, PASSWORD_RULES } from "@/lib/password"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface WorkerPermissions {
@@ -43,6 +46,8 @@ interface WorkerPermissions {
   can_see_clients: boolean
   can_add_clients: boolean
   can_edit_clients: boolean
+  can_edit_profile: boolean
+  can_manage_branches: boolean
 }
 
 interface Worker {
@@ -128,6 +133,12 @@ const PERM_GROUPS = [
       { key: "can_edit_clients", label: "Edit clients", description: "Can edit client details" },
     ],
   },
+  {
+    label: "Profile & Account",
+    items: [
+      { key: "can_edit_profile", label: "Can edit profile details", description: "Can edit their own name and personal details" },
+    ],
+  },
 ]
 
 const DEFAULT_PERMS: WorkerPermissions = {
@@ -149,6 +160,8 @@ const DEFAULT_PERMS: WorkerPermissions = {
   can_see_clients: false,
   can_add_clients: false,
   can_edit_clients: false,
+  can_edit_profile: false,
+  can_manage_branches: false,
 }
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────────
@@ -268,7 +281,7 @@ function PermissionsPanel({
   )
 }
 
-// ─── Active permission badges ──────────────────────────────────────────────────
+// ── Active permission badges ──
 const PERM_BADGE_LABELS: Record<string, string> = {
   can_sell: "Sell",
   can_manage_orders: "Orders",
@@ -283,6 +296,7 @@ const PERM_BADGE_LABELS: Record<string, string> = {
   can_see_clients: "Clients",
   can_add_clients: "Add Client",
   can_edit_clients: "Edit Client",
+  can_manage_branches: "Branches",
 }
 
 function PermBadges({ perms }: { perms: WorkerPermissions }) {
@@ -308,7 +322,123 @@ function PermBadges({ perms }: { perms: WorkerPermissions }) {
   )
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
+function WorkerRowMenu({
+  worker,
+  hasPendingReset,
+  isLast = false,
+  onResetPassword,
+  onEditPermissions,
+  onToggleStatus,
+  onDelete,
+}: {
+  worker: Worker
+  hasPendingReset: boolean
+  isLast?: boolean
+  onResetPassword: () => void
+  onEditPermissions: () => void
+  onToggleStatus: () => void
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [open])
+
+  return (
+    <div className="relative inline-block text-left" ref={menuRef}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setOpen((v) => !v)}
+        className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg cursor-pointer"
+        title="More actions"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+
+      {open && (
+        <div
+          className={cn(
+            "absolute right-0 w-48 bg-white rounded-xl shadow-2xl border border-zinc-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100",
+            isLast ? "bottom-full mb-1.5" : "top-full mt-1"
+          )}
+        >
+          <button
+            onClick={() => {
+              setOpen(false)
+              onResetPassword()
+            }}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs text-amber-900 hover:bg-amber-50 font-medium transition-colors text-left cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <KeyRound className="h-3.5 w-3.5 text-amber-600" />
+              Reset Password
+            </span>
+            {hasPendingReset && (
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setOpen(false)
+              onEditPermissions()
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50 transition-colors text-left cursor-pointer"
+          >
+            <Shield className="h-3.5 w-3.5 text-indigo-600" />
+            Edit Permissions
+          </button>
+
+          <button
+            onClick={() => {
+              setOpen(false)
+              onToggleStatus()
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50 transition-colors text-left cursor-pointer"
+          >
+            {worker.is_active ? (
+              <>
+                <UserX className="h-3.5 w-3.5 text-amber-600" />
+                Deactivate Worker
+              </>
+            ) : (
+              <>
+                <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                Activate Worker
+              </>
+            )}
+          </button>
+
+          <div className="h-px bg-zinc-100 my-1" />
+
+          <button
+            onClick={() => {
+              setOpen(false)
+              onDelete()
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 font-medium transition-colors text-left cursor-pointer"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+            Delete Account
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Page ──
 export default function WorkersPage() {
   const queryClient = useQueryClient()
   const { data: session } = useSession()
@@ -335,6 +465,65 @@ export default function WorkersPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Worker | null>(null)
 
+  // Password reset state & query
+  const [resetModalWorker, setResetModalWorker] = useState<{ id: string; worker_name: string; worker_phone?: string | null } | null>(null)
+  const [newResetPassword, setNewResetPassword] = useState("")
+  const [resetReason, setResetReason] = useState("Worker forgot password")
+  const [sendResetSms, setSendResetSms] = useState(true)
+
+  const { data: resetRequestsData } = useQuery<{ count: number; requests: any[] }>({
+    queryKey: ["pending-password-resets"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/admin/password-resets")
+      return data
+    },
+    refetchInterval: 15000,
+  })
+
+  const pendingRequests: any[] = Array.isArray(resetRequestsData)
+    ? resetRequestsData
+    : (resetRequestsData as any)?.requests || []
+  const pendingCount = pendingRequests.length
+
+  function openResetModal(w: { id: string; worker_name: string; worker_phone?: string | null }) {
+    setResetModalWorker(w)
+    // Generate a strong temporary password meeting the policy (8+ chars, alphanumeric, symbol)
+    setNewResetPassword(generateStrongPassword(10))
+    setResetReason("Worker forgot password")
+    setSendResetSms(true)
+  }
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async () => {
+      if (!resetModalWorker) return
+      const val = validatePassword(newResetPassword)
+      if (!val.isValid) {
+        throw new Error(
+          "Password must be at least 8 characters, alphanumeric, and contain a symbol (e.g. !@#$%^&*)."
+        )
+      }
+      const { data } = await api.post(`/api/v1/admin/workers/${resetModalWorker.id}/reset-password`, {
+        new_password: newResetPassword,
+        reason: resetReason,
+        send_sms: sendResetSms,
+      })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workers"] })
+      queryClient.invalidateQueries({ queryKey: ["pending-password-resets"] })
+      queryClient.invalidateQueries({ queryKey: ["pending-password-resets-count"] })
+      toast.success(`Password reset for ${resetModalWorker?.worker_name}!`, {
+        description: sendResetSms ? "SMS notification sent to worker." : "Credentials updated.",
+      })
+      setResetModalWorker(null)
+      setNewResetPassword("")
+    },
+    onError: (err: unknown) => {
+      toast.error(getErrorMessage(err, "Failed to reset password"))
+    },
+  })
+
   function showToast(type: "success" | "error", message: string) {
     if (type === "success") toast.success(message)
     else toast.error(message)
@@ -343,6 +532,12 @@ export default function WorkersPage() {
   // Create worker
   const createMutation = useMutation({
     mutationFn: async () => {
+      const val = validatePassword(password)
+      if (!val.isValid) {
+        throw new Error(
+          "Password must be at least 8 characters, alphanumeric, and contain a symbol (e.g. !@#$%^&*)."
+        )
+      }
       const { data } = await api.post("/api/v1/create_worker", {
         worker_name: name.trim(),
         role_label: roleLabel.trim() || "",
@@ -361,8 +556,7 @@ export default function WorkersPage() {
       setNewPerms(DEFAULT_PERMS); setShowForm(false); setShowPermPanel(false)
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      showToast("error", msg || "Failed to create worker.")
+      showToast("error", getErrorMessage(err, "Failed to create worker."))
     },
   })
 
@@ -404,8 +598,7 @@ export default function WorkersPage() {
       setEditTarget(null)
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      showToast("error", msg || "Failed to update permissions.")
+      showToast("error", getErrorMessage(err, "Failed to update permissions."))
     },
   })
 
@@ -436,6 +629,57 @@ export default function WorkersPage() {
       </div>
 
 
+      {/* Pending Password Reset Requests Alert */}
+      {pendingCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <KeyRound className="h-5 w-5 animate-bounce" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                <span>{pendingCount} Pending Password Reset Request{pendingCount > 1 ? "s" : ""}</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900">
+                  Action Required
+                </span>
+              </h3>
+              <p className="text-xs text-amber-800 mt-0.5">
+                The following worker(s) requested password recovery. Click &quot;Reset Password&quot; to issue new credentials.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            {pendingRequests.map((req) => (
+              <div
+                key={req.id}
+                className="bg-white/95 backdrop-blur-xs border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3 shadow-2xs"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-zinc-900 truncate">{req.worker_name}</p>
+                  <p className="text-[11px] text-zinc-500 font-mono truncate">{req.worker_email}</p>
+                  <p className="text-[10px] text-amber-700 font-medium">
+                    {req.worker_branch_name || "General"} • {req.worker_phone || "No phone"}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => openResetModal({
+                    id: req.worker_id,
+                    worker_name: req.worker_name,
+                    worker_phone: req.worker_phone,
+                  })}
+                  className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8 px-3 rounded-lg shadow-2xs shrink-0 cursor-pointer font-medium"
+                >
+                  <KeyRound className="h-3.5 w-3.5 mr-1" />
+                  Reset Password
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Create Worker Form */}
       {showForm && (
         <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6 space-y-6">
@@ -455,8 +699,8 @@ export default function WorkersPage() {
               <Input id="w-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="worker@example.com" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="w-phone">Phone (optional)</Label>
-              <Input id="w-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+233 xx xxx xxxx" />
+              <Label htmlFor="w-phone">Phone number * (required for alerts)</Label>
+              <Input id="w-phone" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+233 xx xxx xxxx" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="w-password">Password *</Label>
@@ -524,7 +768,7 @@ export default function WorkersPage() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 shadow-sm">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-100 bg-zinc-50 text-xs text-zinc-500 uppercase tracking-wider">
@@ -537,8 +781,9 @@ export default function WorkersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {workers.map((w) => {
+                {workers.map((w, idx) => {
                   const isSelf = w.id === currentUserId
+                  const isPendingReset = pendingRequests.some((r) => r.worker_id === w.id)
                   return (
                     <tr key={w.id} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-4 py-3">
@@ -547,9 +792,14 @@ export default function WorkersPage() {
                             {w.worker_name.charAt(0)}
                           </div>
                           <div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-medium text-zinc-900">{w.worker_name}</span>
                               {isSelf && <span className="text-[10px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-medium border border-zinc-200">You</span>}
+                              {isPendingReset && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-bold animate-pulse">
+                                  <KeyRound className="h-2.5 w-2.5 text-amber-700" /> Reset Requested
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs text-zinc-400 font-mono">{w.worker_email}</p>
                             {w.role_label && <p className="text-xs text-indigo-600 font-medium mt-0.5">{w.role_label}</p>}
@@ -568,31 +818,29 @@ export default function WorkersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-zinc-400 text-xs">{formatDate(w.created_at)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-right">
                         {!isSelf && (
-                          <div className="flex items-center justify-end gap-1">
-                            <Button size="sm" variant="ghost"
-                              onClick={() => openPermEditor(w)}
-                              className="h-8 px-2.5 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                              title="Edit permissions"
-                            >
-                              <Shield className="h-3.5 w-3.5 mr-1" />Permissions
-                            </Button>
-                            <Button size="sm" variant="ghost"
-                              disabled={toggleMutation.isPending}
-                              onClick={() => toggleMutation.mutate(w.id)}
-                              className={cn("h-8 px-2.5 text-xs font-medium transition-colors",
-                                w.is_active ? "text-amber-700 hover:text-amber-800 hover:bg-amber-50" : "text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
-                              )}
-                            >
-                              {w.is_active ? <><UserX className="h-3.5 w-3.5 mr-1 text-amber-600" />Deactivate</> : <><UserCheck className="h-3.5 w-3.5 mr-1 text-emerald-600" />Activate</>}
-                            </Button>
-                            <Button size="sm" variant="ghost"
-                              onClick={() => setDeleteTarget(w)}
-                              className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            {isPendingReset && (
+                              <Button
+                                size="sm"
+                                onClick={() => openResetModal(w)}
+                                className="h-7 px-2.5 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-2xs font-medium animate-pulse shrink-0 cursor-pointer"
+                                title="Worker requested a password reset"
+                              >
+                                <KeyRound className="h-3.5 w-3.5 mr-1" />
+                                Reset Password
+                              </Button>
+                            )}
+                            <WorkerRowMenu
+                              worker={w}
+                              hasPendingReset={isPendingReset}
+                              isLast={idx >= workers.length - 2}
+                              onResetPassword={() => openResetModal(w)}
+                              onEditPermissions={() => openPermEditor(w)}
+                              onToggleStatus={() => toggleMutation.mutate(w.id)}
+                              onDelete={() => setDeleteTarget(w)}
+                            />
                           </div>
                         )}
                       </td>
@@ -607,13 +855,19 @@ export default function WorkersPage() {
           <div className="flex md:hidden flex-col gap-3">
             {workers.map((w) => {
               const isSelf = w.id === currentUserId
+              const isPendingReset = pendingRequests.some((r) => r.worker_id === w.id)
               return (
                 <div key={w.id} className="bg-white rounded-xl border border-zinc-200 p-4 shadow-sm flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-zinc-900 truncate">{w.worker_name}</p>
                         {isSelf && <span className="text-[10px] bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded font-medium border border-zinc-200">You</span>}
+                        {isPendingReset && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-bold animate-pulse">
+                            Reset Needed
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-zinc-500 font-mono mt-0.5 truncate">{w.worker_email}</p>
                       {w.role_label && <p className="text-xs text-indigo-600 font-medium mt-0.5">{w.role_label}</p>}
@@ -630,6 +884,9 @@ export default function WorkersPage() {
                   <div className="text-xs text-zinc-500 border-t border-zinc-100 pt-2.5">Branch: <strong>{w.worker_branch_name || "General"}</strong></div>
                   {!isSelf && (
                     <div className="flex items-center gap-2 pt-1 border-t border-zinc-100 flex-wrap">
+                      <Button size="sm" variant="outline" onClick={() => openResetModal(w)} className="flex-1 h-8 text-xs text-amber-700 border-amber-200 hover:bg-amber-50">
+                        <KeyRound className="h-3.5 w-3.5 mr-1 text-amber-600" />Reset PW
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => openPermEditor(w)} className="flex-1 h-8 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50">
                         <Shield className="h-3.5 w-3.5 mr-1" />Permissions
                       </Button>
@@ -727,6 +984,107 @@ export default function WorkersPage() {
                 {deleteMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Deleting...</> : <><Trash2 className="h-4 w-4 mr-1.5" />Delete Account</>}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Admin Reset Password Modal */}
+      {resetModalWorker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-zinc-200 relative">
+            <button
+              onClick={() => setResetModalWorker(null)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 p-1 rounded-lg"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-zinc-900">Reset Worker Password</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  For {resetModalWorker.worker_name} ({resetModalWorker.worker_phone || "No phone"})
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                resetPasswordMutation.mutate()
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-zinc-700">New Temporary Password</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewResetPassword(generateStrongPassword(10))
+                    }}
+                    className="text-[11px] text-amber-700 hover:underline font-medium cursor-pointer"
+                  >
+                    Generate another
+                  </button>
+                </div>
+                <Input
+                  required
+                  value={newResetPassword}
+                  onChange={(e) => setNewResetPassword(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-zinc-700">Audit Reason *</Label>
+                <Input
+                  required
+                  value={resetReason}
+                  onChange={(e) => setResetReason(e.target.value)}
+                  placeholder="e.g. Worker forgot password or requested reset"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  id="send-sms-cb"
+                  type="checkbox"
+                  checked={sendResetSms}
+                  onChange={(e) => setSendResetSms(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
+                />
+                <Label htmlFor="send-sms-cb" className="text-xs text-zinc-600 font-normal cursor-pointer">
+                  Send SMS alert to worker that their password has been reset
+                </Label>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setResetModalWorker(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={resetPasswordMutation.isPending || !newResetPassword || !resetReason}
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {resetPasswordMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Saving...
+                    </>
+                  ) : (
+                    "Set New Password"
+                  )}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

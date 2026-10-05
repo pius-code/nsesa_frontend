@@ -60,6 +60,36 @@ export default function BranchesPage() {
 
   const { data: branches = [], isLoading, isError } = useBranches()
 
+  const { data: profile } = useQuery<{ worker_branch_name?: string | null }>({
+    queryKey: ["dashboard-profile"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/profile")
+      return data
+    },
+    staleTime: 10000,
+  })
+
+  const activeBranch = profile?.worker_branch_name || session?.user?.worker_branch_name || "Main Branch"
+
+  const switchMutation = useMutation({
+    mutationFn: async (targetBranchName: string) => {
+      const { data } = await api.post("/api/v1/branches/switch", { branch_name: targetBranchName })
+      return data
+    },
+    onSuccess: (data, targetBranchName) => {
+      queryClient.invalidateQueries({ queryKey: ["dashboard-profile"] })
+      queryClient.invalidateQueries({ queryKey: ["branches"] })
+      queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      queryClient.invalidateQueries({ queryKey: ["transactions"] })
+      queryClient.invalidateQueries({ queryKey: ["overview"] })
+      toast.success(`Switched operating branch to ${targetBranchName}`)
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Failed to switch operating branch"))
+    },
+  })
+
+
   const [showModal, setShowModal] = useState(false)
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
   const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null)
@@ -283,27 +313,48 @@ export default function BranchesPage() {
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-zinc-100 flex items-center justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openEditModal(branch)}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Edit
-                </Button>
-                {!branch.is_main && (
+              <div className="mt-5 pt-3 border-t border-zinc-100 flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  {activeBranch.trim().toLowerCase() === branch.branch_name.trim().toLowerCase() ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      Active Branch
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={switchMutation.isPending}
+                      onClick={() => switchMutation.mutate(branch.branch_name)}
+                      className="h-8 px-2.5 text-xs text-zinc-700 hover:text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50/80 transition-colors cursor-pointer"
+                    >
+                      <Store className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                      Operate Here
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => setDeletingBranch(branch)}
-                    className="h-8 px-2.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    variant="outline"
+                    onClick={() => openEditModal(branch)}
+                    className="h-8 px-2.5 text-xs"
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    Edit
                   </Button>
-                )}
+                  {!branch.is_main && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeletingBranch(branch)}
+                      className="h-8 px-2.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
