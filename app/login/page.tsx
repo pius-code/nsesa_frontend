@@ -23,8 +23,17 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    // Safety timeout: if login hasn't responded in 45 seconds, show an error.
+    // This prevents the UI from spinning indefinitely on Render cold starts.
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setError("Sign in is taking longer than expected. The server may be waking up — please try again in a moment.");
+    }, 45000);
+
     const formData = new FormData(e.currentTarget);
     const result = await loginAction(formData);
+
+    clearTimeout(timeout);
 
     if (result?.error) {
       setError(result.error);

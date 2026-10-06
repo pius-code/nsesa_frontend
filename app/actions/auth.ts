@@ -4,24 +4,13 @@ import { signIn, auth } from "@/auth"
 import { AuthError } from "next-auth"
 import { redirect } from "next/navigation"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
-
 export async function loginAction(formData: FormData) {
   const worker_email = formData.get("worker_email") as string
   const worker_password = formData.get("worker_password") as string
 
-  // Precheck directly against the backend
-  const precheck = await fetch(`${API_URL}/api/v1/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ worker_email, worker_password }),
-  })
-
-  if (!precheck.ok) {
-    const data = await precheck.json().catch(() => null)
-    return { error: data?.detail || "Invalid email or password. Please try again." }
-  }
-
+  // Single login call — NextAuth's authorize handles the backend check internally.
+  // We removed the duplicate "precheck" fetch that was calling bcrypt twice on Render,
+  // which was the main cause of 5+ minute sign-in wait times.
   try {
     await signIn("credentials", {
       worker_email,
@@ -36,6 +25,11 @@ export async function loginAction(formData: FormData) {
   }
 
   const session = await auth()
+
+  if (!session) {
+    return { error: "Login failed. Please try again." }
+  }
+
   const isAdminRole = ["admin", "super_admin", "owner", "manager"].includes(
     session?.user?.worker_role || ""
   )
