@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -122,7 +123,7 @@ export function ExpensesList() {
       setShowAddForm(false)
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.detail || err.message || "Failed to save expense")
+      toast.error(getErrorMessage(err, "Failed to save expense"))
     },
   })
 
@@ -152,7 +153,7 @@ export function ExpensesList() {
       setEditingExpense(null)
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.detail || err.message || "Failed to update expense")
+      toast.error(getErrorMessage(err, "Failed to update expense"))
     },
   })
 
@@ -168,7 +169,7 @@ export function ExpensesList() {
       setDeletingId(null)
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.detail || "Failed to delete expense")
+      toast.error(getErrorMessage(err, "Failed to delete expense"))
       setDeletingId(null)
     },
   })

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import api from "@/lib/axios";
+import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,9 +57,7 @@ export default function RegisterPage() {
       });
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      toast.error(msg ?? "Registration failed. Please try again.");
+      toast.error(getErrorMessage(err, "Registration failed. Please try again."));
     },
   });
 

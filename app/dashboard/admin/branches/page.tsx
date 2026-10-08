@@ -1,4 +1,5 @@
 "use client"
+import { getErrorMessage } from "@/lib/utils";
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
@@ -49,8 +50,8 @@ function useBranches() {
   })
 }
 
-function errorMessage(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
+function errorMessage(err: unknown, fallback: string): string {
+  return getErrorMessage(err, fallback);
 }
 
 export default function BranchesPage() {

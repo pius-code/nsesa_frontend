@@ -21,7 +21,8 @@ import {
   Info,
   Clock,
 } from "lucide-react";
-import api from "@/lib/axios";
+import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -157,9 +158,7 @@ export default function BroadcastPage() {
       queryClient.invalidateQueries({ queryKey: ["broadcast-recipients-count"] });
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response
-        ?.data?.detail;
-      toast.error(msg ?? "Failed to send broadcast");
+      toast.error(getErrorMessage(err, "Failed to send broadcast"));
       setConfirming(false);
     },
   });

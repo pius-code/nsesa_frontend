@@ -1,4 +1,5 @@
 "use client";
+import { getErrorMessage } from "@/lib/utils";
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
@@ -94,8 +95,8 @@ function useProcessedByOptions() {
   });
 }
 
-function errorMessage(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback;
+function errorMessage(err: unknown, fallback: string): string {
+  return getErrorMessage(err, fallback);
 }
 
 interface AuditChange {

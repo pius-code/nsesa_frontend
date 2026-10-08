@@ -6,6 +6,7 @@ import { Minus, Plus, Trash2, Loader2, ShoppingCart, Search, X, UserPlus, Check 
 import { toast } from "sonner"
 import { useQueryClient } from "@tanstack/react-query"
 import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -136,8 +137,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
       toast.success("Client registered")
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      toast.error(msg ?? "Failed to register client")
+      toast.error(getErrorMessage(err, "Failed to register client"))
     },
   })
 
@@ -265,9 +265,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
     },
     onError: (err: unknown) => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      toast.error(msg ?? "Failed to submit. Please try again.")
+      toast.error(getErrorMessage(err, "Failed to submit. Please try again."))
     },
   })
 

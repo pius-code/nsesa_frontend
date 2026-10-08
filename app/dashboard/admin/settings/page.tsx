@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -108,7 +109,7 @@ export default function SettingsPage() {
       }
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail ?? "Failed to update company profile."
+      const msg = getErrorMessage(err, "Failed to update company profile.")
       setNotification({ type: "error", message: msg })
     },
   })

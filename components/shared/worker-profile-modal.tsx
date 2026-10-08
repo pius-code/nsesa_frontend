@@ -17,6 +17,7 @@ import {
   CheckCircle2,
 } from "lucide-react"
 import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -118,7 +119,7 @@ export function WorkerProfileModal({
       onClose()
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || err?.message || "Failed to update profile."
+      const msg = getErrorMessage(err, "Failed to update profile.")
       toast.error(msg)
     },
   })

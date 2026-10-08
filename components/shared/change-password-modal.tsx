@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Lock, Loader2, X, Eye, EyeOff, Check, XCircle } from "lucide-react"
 import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -55,7 +56,7 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
       onClose()
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || err?.message || "Failed to change password"
+      const msg = getErrorMessage(err, "Failed to change password")
       setError(msg)
     },
   })

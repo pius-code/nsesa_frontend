@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react"
 import { Loader2, Users, Plus, Pencil, Check, X, Trash2, Search, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
 import api from "@/lib/axios"
+import { getErrorMessage } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -98,7 +99,7 @@ export function ClientsList() {
       setShowForm(false)
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || "Failed to add client. Phone number may already be registered."
+      const msg = getErrorMessage(err, "Failed to add client. Phone number may already be registered.")
       toast.error(msg)
     },
   })
@@ -118,7 +119,7 @@ export function ClientsList() {
       cancelEdit()
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || "Failed to update client."
+      const msg = getErrorMessage(err, "Failed to update client.")
       toast.error(msg)
     },
   })
@@ -134,7 +135,7 @@ export function ClientsList() {
       setDeletingId(null)
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || "Failed to delete client."
+      const msg = getErrorMessage(err, "Failed to delete client.")
       toast.error(msg)
     },
   })

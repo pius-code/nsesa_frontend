@@ -1,4 +1,5 @@
 "use client"
+import { getErrorMessage } from "@/lib/utils";
 
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -38,8 +39,8 @@ function useInventory() {
   })
 }
 
-function errorMessage(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback; // noqa
+function errorMessage(err: unknown, fallback: string): string {
+  return getErrorMessage(err, fallback);
 }
 
 function formatDate(iso: string) {

@@ -1,4 +1,5 @@
 "use client"
+import { getErrorMessage } from "@/lib/utils";
 
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -90,8 +91,8 @@ interface ShopDetailsResponse {
 
 const LIMIT = 10
 
-function errorMessage(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
+function errorMessage(err: unknown, fallback: string): string {
+  return getErrorMessage(err, fallback);
 }
 
 function formatDate(iso: string) {
