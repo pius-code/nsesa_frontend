@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { loginAction } from "@/app/actions/auth";
 import { Store, Loader2, CheckCircle2, X, AlertCircle, Eye, EyeOff } from "lucide-react";
 import api from "@/lib/axios";
@@ -9,6 +9,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("expired=true")) {
+      setError("Your session has expired. Please sign in again.");
+    }
+  }, []);
 
   // Forgot password modal state
   const [showForgotModal, setShowForgotModal] = useState(false);
