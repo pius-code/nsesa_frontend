@@ -30,20 +30,29 @@ export default function LoginPage() {
     setError("");
 
     // Safety timeout: if login hasn't responded in 45 seconds, show an error.
-    // This prevents the UI from spinning indefinitely on Render cold starts.
+    // This prevents the UI from spinning indefinitely on cold starts.
     const timeout = setTimeout(() => {
       setLoading(false);
       setError("Sign in is taking longer than expected. The server may be waking up — please try again in a moment.");
     }, 45000);
 
-    const formData = new FormData(e.currentTarget);
-    const result = await loginAction(formData);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const result = await loginAction(formData);
 
-    clearTimeout(timeout);
-
-    if (result?.error) {
-      setError(result.error);
+      if (result?.error) {
+        setError(result.error);
+        setLoading(false);
+      }
+    } catch (err: any) {
+      // In Next.js, navigation throws NEXT_REDIRECT which is expected.
+      if (err?.message?.includes("NEXT_REDIRECT") || err?.digest?.includes("NEXT_REDIRECT")) {
+        return;
+      }
+      setError(err?.message || "Failed to sign in. Please try again.");
       setLoading(false);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
