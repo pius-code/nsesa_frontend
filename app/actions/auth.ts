@@ -1,7 +1,6 @@
 "use server"
 
 import { signIn } from "@/auth"
-import { AuthError } from "next-auth"
 
 export async function loginAction(formData: FormData) {
   const worker_email = formData.get("worker_email") as string
@@ -13,11 +12,19 @@ export async function loginAction(formData: FormData) {
       worker_password,
       redirectTo: "/",
     })
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return { error: "Invalid email or password. Please try again." }
+  } catch (error: any) {
+    // In Next.js, navigation/redirect works by throwing NEXT_REDIRECT.
+    // We MUST re-throw it so Next.js can navigate to the destination!
+    const isRedirect =
+      error?.message?.includes("NEXT_REDIRECT") ||
+      error?.digest?.includes("NEXT_REDIRECT") ||
+      (typeof error?.digest === "string" && error.digest.startsWith("NEXT_REDIRECT"))
+
+    if (isRedirect) {
+      throw error
     }
-    // Re-throw redirect error so Next.js performs navigation to "/"
-    throw error
+
+    // Any other error during credentials sign-in is an authentication failure
+    return { error: "Invalid email or password. Please try again." }
   }
 }

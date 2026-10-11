@@ -13,6 +13,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("expired=true")) {
       setError("Your session has expired. Please sign in again.");
+      window.history.replaceState({}, "", "/login");
     }
   }, []);
 
