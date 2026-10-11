@@ -23,6 +23,8 @@ import {
   Banknote,
   Building2,
   CreditCard,
+  Plus,
+  Minus,
   Calendar,
   Sparkles,
   TrendingUp,
@@ -378,6 +380,14 @@ function ReceiptActions({ tx }: { tx: Transaction }) {
 
 type ActionMode = "delete" | "refund" | "edit" | null;
 
+interface AvailableProduct {
+  _id: string;
+  product_name: string;
+  selling_price: number;
+  amount_available: number;
+  is_available: boolean;
+}
+
 function ManagePanel({ tx }: { tx: Transaction }) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<ActionMode>(null);
@@ -386,11 +396,89 @@ function ManagePanel({ tx }: { tx: Transaction }) {
   const [editNumber, setEditNumber] = useState(tx.customer_number ?? "");
   const [editEmail, setEditEmail] = useState(tx.customer_email ?? "");
   const [editNote, setEditNote] = useState(tx.note ?? "");
+  const [editItems, setEditItems] = useState<TransactionItem[]>(() =>
+    tx.items.map((i) => ({ ...i }))
+  );
+  const [selectedAddProductId, setSelectedAddProductId] = useState("");
+
+  const { data: availableProducts = [] } = useQuery<AvailableProduct[]>({
+    queryKey: ["inventory"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory");
+      return data;
+    },
+    enabled: mode === "edit",
+  });
+
+  function startEdit() {
+    setEditName(tx.customer_name);
+    setEditNumber(tx.customer_number ?? "");
+    setEditEmail(tx.customer_email ?? "");
+    setEditNote(tx.note ?? "");
+    setEditItems(tx.items.map((i) => ({ ...i })));
+    setReason("");
+    setSelectedAddProductId("");
+    setMode("edit");
+  }
 
   function reset() {
     setMode(null);
     setReason("");
+    setSelectedAddProductId("");
   }
+
+  function updateItemQuantity(index: number, newQty: number) {
+    const qty = Math.max(1, newQty);
+    setEditItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item;
+        return {
+          ...item,
+          quantity: qty,
+          subtotal: parseFloat((qty * item.unit_price).toFixed(2)),
+        };
+      })
+    );
+  }
+
+  function removeItem(index: number) {
+    setEditItems((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  function handleAddProduct() {
+    if (!selectedAddProductId) return;
+    const prod = availableProducts.find((p) => p._id === selectedAddProductId);
+    if (!prod) return;
+
+    setEditItems((prev) => {
+      const existingIdx = prev.findIndex((i) => i.product_id === prod._id);
+      if (existingIdx >= 0) {
+        return prev.map((item, idx) => {
+          if (idx !== existingIdx) return item;
+          const newQty = item.quantity + 1;
+          return {
+            ...item,
+            quantity: newQty,
+            subtotal: parseFloat((newQty * item.unit_price).toFixed(2)),
+          };
+        });
+      } else {
+        return [
+          ...prev,
+          {
+            product_id: prod._id,
+            product_name: prod.product_name,
+            unit_price: prod.selling_price,
+            quantity: 1,
+            subtotal: prod.selling_price,
+          },
+        ];
+      }
+    });
+    setSelectedAddProductId("");
+  }
+
+  const currentTotal = editItems.reduce((acc, i) => acc + i.subtotal, 0);
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -399,7 +487,9 @@ function ManagePanel({ tx }: { tx: Transaction }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Transaction deleted");
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      toast.success("Transaction deleted and inventory restocked");
       reset();
     },
     onError: (err: unknown) => toast.error(errorMessage(err, "Failed to delete transaction")),
@@ -412,7 +502,9 @@ function ManagePanel({ tx }: { tx: Transaction }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Transaction refunded");
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      toast.success("Transaction refunded and inventory restocked");
       reset();
     },
     onError: (err: unknown) => toast.error(errorMessage(err, "Failed to refund transaction")),
@@ -420,18 +512,32 @@ function ManagePanel({ tx }: { tx: Transaction }) {
 
   const editMutation = useMutation({
     mutationFn: async () => {
+      if (editItems.length === 0) {
+        throw new Error("A receipt must contain at least one item");
+      }
       const { data } = await api.patch(`/api/v1/transactions/${tx._id}`, {
         reason,
         customer_name: editName.trim() || null,
         customer_number: editNumber.trim() || null,
         customer_email: editEmail.trim() || null,
         note: editNote.trim() || null,
+        items: editItems.map((i) => ({
+          product_id: i.product_id,
+          product_name: i.product_name,
+          unit_price: i.unit_price,
+          unit_cost: 0,
+          quantity: i.quantity,
+          subtotal: i.subtotal,
+        })),
       });
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Transaction updated");
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      toast.success("Receipt and inventory updated successfully!");
       reset();
     },
     onError: (err: unknown) => toast.error(errorMessage(err, "Failed to update transaction")),
@@ -445,9 +551,9 @@ function ManagePanel({ tx }: { tx: Transaction }) {
         className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <Button type="button" size="sm" variant="outline" onClick={() => setMode("edit")}>
+        <Button type="button" size="sm" variant="outline" onClick={startEdit}>
           <Pencil className="h-3.5 w-3.5 mr-1" />
-          Edit
+          Edit Receipt
         </Button>
         {tx.status === "success" && (
           <Button type="button" size="sm" variant="outline" onClick={() => setMode("refund")}>
@@ -464,27 +570,157 @@ function ManagePanel({ tx }: { tx: Transaction }) {
   }
 
   return (
-    <div className="pt-3 mt-3 border-t border-zinc-100 space-y-2.5" onClick={(e) => e.stopPropagation()}>
+    <div className="pt-3 mt-3 border-t border-zinc-100 space-y-3.5" onClick={(e) => e.stopPropagation()}>
       {mode === "edit" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Customer name" />
-          <Input value={editNumber} onChange={(e) => setEditNumber(e.target.value)} placeholder="Phone" />
-          <Input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Email" />
-          <Input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Note (e.g. no pepper)" className="sm:col-span-3" />
+        <div className="space-y-3.5">
+          {/* Customer info fields */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-zinc-700">Customer Details</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Customer name" />
+              <Input value={editNumber} onChange={(e) => setEditNumber(e.target.value)} placeholder="Phone" />
+              <Input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Email" />
+              <Input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Note (e.g. no pepper)" className="sm:col-span-3" />
+            </div>
+          </div>
+
+          {/* Purchased Items Editor */}
+          <div className="space-y-2.5 p-3.5 bg-zinc-50/80 border border-zinc-200 rounded-xl">
+            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200">
+              <span className="text-xs font-bold text-zinc-800 uppercase tracking-wide">
+                Products Purchased ({editItems.length})
+              </span>
+              <div className="text-right">
+                <span className="text-sm font-bold text-emerald-700">
+                  Total: GH₵{currentTotal.toFixed(2)}
+                </span>
+                {Math.abs(currentTotal - tx.total_price) > 0.01 && (
+                  <span className="ml-2 text-xs text-zinc-400 line-through">
+                    GH₵{tx.total_price.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Items List */}
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {editItems.map((item, idx) => (
+                <div
+                  key={`${item.product_id}-${idx}`}
+                  className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 p-2.5 bg-white border border-zinc-200 rounded-lg shadow-2xs"
+                >
+                  <div className="flex-1 min-w-[130px]">
+                    <p className="text-sm font-medium text-zinc-900 leading-tight">
+                      {item.product_name}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      GH₵{item.unit_price.toFixed(2)} each
+                    </p>
+                  </div>
+
+                  {/* Quantity Stepper */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={item.quantity <= 1}
+                      onClick={() => updateItemQuantity(idx, item.quantity - 1)}
+                      className="h-7 w-7 rounded-md border border-zinc-200 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title="Decrease quantity"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!isNaN(val) && val >= 1) updateItemQuantity(idx, val);
+                      }}
+                      className="w-12 h-7 text-center text-sm font-semibold text-zinc-900 border border-zinc-200 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateItemQuantity(idx, item.quantity + 1)}
+                      className="h-7 w-7 rounded-md border border-zinc-200 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 transition-colors"
+                      title="Increase quantity"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+
+                  {/* Subtotal */}
+                  <div className="text-right min-w-[70px]">
+                    <span className="text-sm font-semibold text-zinc-900">
+                      GH₵{item.subtotal.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Trash / Delete button */}
+                  <button
+                    type="button"
+                    onClick={() => removeItem(idx)}
+                    className="h-7 w-7 rounded-md text-red-500 hover:bg-red-50 hover:text-red-700 flex items-center justify-center transition-colors"
+                    title="Remove item"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              {editItems.length === 0 && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  All items removed. A receipt must have at least one product. If the customer returned all items, cancel and use <strong>Refund</strong> instead.
+                </div>
+              )}
+            </div>
+
+            {/* Add product from shop inventory */}
+            <div className="pt-2 border-t border-zinc-200/60 flex flex-wrap items-center gap-2">
+              <select
+                value={selectedAddProductId}
+                onChange={(e) => setSelectedAddProductId(e.target.value)}
+                className="flex-1 min-w-[200px] h-8 text-xs rounded-lg border border-zinc-300 bg-white px-2.5 text-zinc-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              >
+                <option value="">+ Add a product from shop inventory...</option>
+                {availableProducts
+                  .filter((p) => p.is_available && p.amount_available > 0)
+                  .map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.product_name} — GH₵{p.selling_price.toFixed(2)} ({p.amount_available} in stock)
+                    </option>
+                  ))}
+              </select>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!selectedAddProductId}
+                onClick={handleAddProduct}
+                className="h-8 text-xs font-medium"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add to Receipt
+              </Button>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Audit Reason */}
       <div className="space-y-1">
-        <Label className="text-xs">
-          Reason <span className="text-red-500">*</span>
+        <Label className="text-xs font-semibold text-zinc-700">
+          Reason for {mode === "edit" ? "Edit" : mode === "refund" ? "Refund" : "Deletion"} <span className="text-red-500">*</span>
         </Label>
         <Input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Why are you making this change?"
+          placeholder={mode === "edit" ? "e.g. Swapped 1 item for another, corrected quantity" : "Why are you making this change?"}
           autoFocus
         />
       </div>
-      <div className="flex justify-end gap-2">
+
+      <div className="flex justify-end gap-2 pt-1">
         <Button type="button" size="sm" variant="outline" onClick={reset} disabled={isPending}>
           <X className="h-3.5 w-3.5 mr-1" />
           Cancel
@@ -493,15 +729,23 @@ function ManagePanel({ tx }: { tx: Transaction }) {
           type="button"
           size="sm"
           variant={mode === "delete" ? "destructive" : "default"}
-          disabled={isPending || reason.trim().length < 3}
+          disabled={
+            isPending ||
+            reason.trim().length < 3 ||
+            (mode === "edit" && editItems.length === 0)
+          }
           onClick={() => {
             if (mode === "delete") deleteMutation.mutate();
             else if (mode === "refund") refundMutation.mutate();
             else editMutation.mutate();
           }}
         >
-          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-          Confirm {mode}
+          {isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+          ) : (
+            <Check className="h-3.5 w-3.5 mr-1" />
+          )}
+          {mode === "edit" ? "Save Receipt Changes" : `Confirm ${mode}`}
         </Button>
       </div>
     </div>
