@@ -383,7 +383,7 @@ type ActionMode = "delete" | "refund" | "edit" | null;
 interface AvailableProduct {
   _id: string;
   product_name: string;
-  selling_price: number;
+  product_price: number;
   amount_available: number;
   is_available: boolean;
 }
@@ -468,9 +468,9 @@ function ManagePanel({ tx }: { tx: Transaction }) {
           {
             product_id: prod._id,
             product_name: prod.product_name,
-            unit_price: prod.selling_price,
+            unit_price: prod.product_price,
             quantity: 1,
-            subtotal: prod.selling_price,
+            subtotal: prod.product_price,
           },
         ];
       }
@@ -687,7 +687,7 @@ function ManagePanel({ tx }: { tx: Transaction }) {
                   .filter((p) => p.is_available && p.amount_available > 0)
                   .map((p) => (
                     <option key={p._id} value={p._id}>
-                      {p.product_name} — GH₵{p.selling_price.toFixed(2)} ({p.amount_available} in stock)
+                      {p.product_name} — GH₵{(p.product_price ?? 0).toFixed(2)} ({p.amount_available} in stock)
                     </option>
                   ))}
               </select>
