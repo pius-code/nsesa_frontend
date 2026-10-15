@@ -1,9 +1,10 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   CheckCircle2,
+  AlertTriangle,
   Loader2,
   Package,
   Plus,
@@ -26,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DateStripPicker } from "@/components/ui/date-strip-picker"
+import { StockValuationCards } from "@/components/inventory/stock-valuation-cards"
 import { cn } from "@/lib/utils"
 
 interface InventoryItem {
@@ -161,7 +163,53 @@ export default function InventoryPage() {
   const { data: branches = [] } = useBranches()
   const [selectedBranch, setSelectedBranch] = useState<string>("all")
   const { data: inventory = [], isLoading } = useInventory(selectedBranch)
+  const { data: allInventory = [] } = useInventory("all")
   const { data: categories = [] } = useCategories()
+
+  // Find registered main branch name
+  const mainBranchObj = branches.find((b) => b.is_main)
+  const defaultMainBranchName = mainBranchObj?.branch_name || "Main Branch"
+
+  const normalizeBranch = (name?: string | null) => {
+    if (!name || name.trim() === "" || name.toLowerCase() === "main" || name.toLowerCase() === "main branch") {
+      return defaultMainBranchName
+    }
+    return name.trim()
+  }
+
+  // Cross-branch aggregation mapped by product name
+  const crossBranchMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        totalQuantity: number
+        branchQuantities: { branch: string; quantity: number }[]
+        lowStockBranches: { branch: string; quantity: number }[]
+      }
+    >()
+
+    allInventory.forEach((it) => {
+      const key = (it.product_name || "").trim().toLowerCase()
+      const branch = normalizeBranch(it.branch_name)
+      const existing = map.get(key)
+      if (!existing) {
+        map.set(key, {
+          totalQuantity: it.amount_available,
+          branchQuantities: [{ branch, quantity: it.amount_available }],
+          lowStockBranches:
+            it.amount_available <= LOW_STOCK_THRESHOLD ? [{ branch, quantity: it.amount_available }] : [],
+        })
+      } else {
+        existing.totalQuantity += it.amount_available
+        existing.branchQuantities.push({ branch, quantity: it.amount_available })
+        if (it.amount_available <= LOW_STOCK_THRESHOLD) {
+          existing.lowStockBranches.push({ branch, quantity: it.amount_available })
+        }
+      }
+    })
+
+    return map
+  }, [allInventory, defaultMainBranchName])
 
   const [showForm, setShowForm] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
@@ -406,16 +454,70 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-xl font-bold text-zinc-900">Inventory</h1>
           <p className="text-sm text-zinc-500 mt-0.5">
-            {inventory.length} product{inventory.length !== 1 ? "s" : ""} in stock
+            Stock valuation, branch distribution, and catalog management
           </p>
         </div>
-        <div className="flex gap-2">
+      </div>
+
+      {/* Branch selector tabs if multiple branches exist */}
+      {branches.length > 1 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+          <button
+            type="button"
+            onClick={() => setSelectedBranch("all")}
+            className={cn(
+              "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer border shadow-xs",
+              selectedBranch === "all"
+                ? "bg-zinc-900 text-white border-zinc-900"
+                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
+            )}
+          >
+            <Store className="h-3.5 w-3.5" />
+            All Branches
+          </button>
+          {branches.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setSelectedBranch(b.branch_name)}
+              className={cn(
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer border shadow-xs",
+                selectedBranch === b.branch_name
+                  ? "bg-zinc-900 text-white border-zinc-900"
+                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
+              )}
+            >
+              <Store className="h-3.5 w-3.5" />
+              {b.branch_name} {b.is_main && "(Main)"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Executive Stock Valuation Dashboard */}
+      <StockValuationCards
+        inventory={inventory}
+        branches={branches}
+        selectedBranch={selectedBranch}
+      />
+
+      {/* Action Toolbar placed directly under the valuation cards */}
+      <div className="flex items-center justify-between flex-wrap gap-3 pt-1">
+        <div>
+          <h2 className="text-base font-bold text-zinc-900">Products Catalog</h2>
+          <p className="text-xs text-zinc-500">
+            {inventory.length} product{inventory.length !== 1 ? "s" : ""} {selectedBranch === "all" ? "across all branches" : `in ${selectedBranch}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
           <Button
             onClick={() => {
               setShowBulkImport((v) => !v)
               setShowForm(false)
             }}
             variant={showBulkImport ? "outline" : "secondary"}
+            size="sm"
+            className="h-9 gap-1.5"
           >
             <Upload className="h-4 w-4" />
             Bulk Import
@@ -426,6 +528,8 @@ export default function InventoryPage() {
               setShowBulkImport(false)
             }}
             variant={showForm ? "outline" : "default"}
+            size="sm"
+            className="h-9 gap-1.5"
           >
             <Plus className="h-4 w-4" />
             Add Product
@@ -625,38 +729,7 @@ export default function InventoryPage() {
         </form>
       )}
 
-      {/* Branch selector tabs if multiple branches exist */}
-      {branches.length > 1 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-          <button
-            type="button"
-            onClick={() => setSelectedBranch("all")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0",
-              selectedBranch === "all"
-                ? "bg-zinc-900 text-white"
-                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-            )}
-          >
-            All Branches
-          </button>
-          {branches.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              onClick={() => setSelectedBranch(b.branch_name)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0",
-                selectedBranch === b.branch_name
-                  ? "bg-zinc-900 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-              )}
-            >
-              {b.branch_name} {b.is_main && "(Main)"}
-            </button>
-          ))}
-        </div>
-      )}
+
 
       {/* Inventory Table */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
@@ -678,6 +751,8 @@ export default function InventoryPage() {
               const isDeleting = deletingId === item._id
               const isLowStock = item.amount_available > 0 && item.amount_available <= LOW_STOCK_THRESHOLD
               const isOutOfStock = item.amount_available <= 0
+              const effectiveBranch = normalizeBranch(item.branch_name)
+              const crossData = crossBranchMap.get((item.product_name || "").trim().toLowerCase())
 
               return (
                 <div key={item._id} className="p-4 hover:bg-zinc-50/60 transition-colors">
@@ -725,13 +800,14 @@ export default function InventoryPage() {
                               {item.category_name}
                             </span>
                           )}
-                          {item.branch_name && (
-                            <span className="text-xs text-zinc-400">
-                              • {item.branch_name}
+                          {effectiveBranch && (
+                            <span className="inline-flex items-center gap-1 text-xs text-zinc-600 bg-zinc-100 border border-zinc-200/80 px-2 py-0.5 rounded-md font-medium">
+                              <Store className="h-3 w-3 text-zinc-400" />
+                              {effectiveBranch}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-zinc-500">
+                        <div className="flex items-center gap-3 mt-1.5 text-xs text-zinc-500 flex-wrap">
                           <span>Price: <strong className="text-zinc-800">GH₵{item.product_price.toFixed(2)}</strong></span>
                           {item.cost_price != null && item.cost_price > 0 && (
                             <span>Cost: <strong className="text-zinc-600">GH₵{item.cost_price.toFixed(2)}</strong></span>
@@ -740,6 +816,59 @@ export default function InventoryPage() {
                             <span>Supplier: <strong className="text-zinc-600">{item.supplier_name}</strong></span>
                           )}
                         </div>
+
+                        {/* Cross-branch breakdown & Total Quantity display */}
+                        {crossData && (
+                          <div className="mt-2.5 pt-2 border-t border-dashed border-zinc-200/70 flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className="inline-flex items-center gap-1 font-semibold text-zinc-700 bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-md">
+                                <Boxes className="h-3 w-3 text-zinc-500" />
+                                Total across business: <strong className="text-zinc-900 font-bold">{crossData.totalQuantity} units</strong>
+                              </span>
+                              {crossData.branchQuantities.length > 1 && (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {crossData.branchQuantities.map((bq, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={cn(
+                                        "px-2 py-0.5 rounded text-[11px] font-medium border",
+                                        bq.quantity <= 0
+                                          ? "bg-red-50 text-red-700 border-red-200 font-semibold"
+                                          : bq.quantity <= LOW_STOCK_THRESHOLD
+                                          ? "bg-amber-50 text-amber-700 border-amber-200 font-semibold"
+                                          : "bg-zinc-50 text-zinc-600 border-zinc-200"
+                                      )}
+                                    >
+                                      {bq.branch}: <strong>{bq.quantity}</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Stockout or low stock alerts per branch */}
+                            {crossData.lowStockBranches.length > 0 && (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {crossData.lowStockBranches.map((dep, idx) => (
+                                  <span
+                                    key={idx}
+                                    className={cn(
+                                      "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border",
+                                      dep.quantity <= 0
+                                        ? "bg-red-50 text-red-800 border-red-200"
+                                        : "bg-amber-50 text-amber-800 border-amber-200"
+                                    )}
+                                  >
+                                    <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600" />
+                                    <span>
+                                      <strong>{dep.branch}</strong> is {dep.quantity <= 0 ? "out of stock" : `running low (${dep.quantity} left)`}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Stock Count Badge & Actions */}

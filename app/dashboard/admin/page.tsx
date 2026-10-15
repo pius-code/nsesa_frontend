@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import {
@@ -15,6 +16,7 @@ import {
   Wallet,
   RotateCcw,
   AlertTriangle,
+  Store,
   Award,
   Clock,
   Users2,
@@ -41,6 +43,8 @@ interface LowStockEntry {
   id: string;
   product_name: string;
   amount_available: number;
+  branch_name?: string | null;
+  total_shop_quantity?: number | null;
 }
 
 interface DashboardOverview {
@@ -62,11 +66,29 @@ interface DashboardOverview {
   low_stock_items: LowStockEntry[];
 }
 
-function useDashboardOverview() {
-  return useQuery<DashboardOverview>({
-    queryKey: ["dashboard-overview"],
+interface BranchOption {
+  id: string;
+  branch_name: string;
+  is_main: boolean;
+}
+
+function useBranches() {
+  return useQuery<BranchOption[]>({
+    queryKey: ["branches"],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/dashboard/overview");
+      const { data } = await api.get("/api/v1/branches");
+      return data;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+function useDashboardOverview(branchName?: string) {
+  return useQuery<DashboardOverview>({
+    queryKey: ["dashboard-overview", branchName],
+    queryFn: async () => {
+      const params = branchName && branchName !== "all" ? { branch_name: branchName } : {};
+      const { data } = await api.get("/api/v1/dashboard/overview", { params });
       return data;
     },
     staleTime: 60 * 1000,
@@ -169,8 +191,12 @@ function RecentRow({ tx }: { tx: Transaction }) {
 
 export default function AdminOverviewPage() {
   const { data: session } = useSession();
-  const { data: transactions = [], isLoading: txLoading } = useTransactions();
-  const { data: overview, isLoading: overviewLoading } = useDashboardOverview();
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const { data: branches = [] } = useBranches();
+  const { data: transactions = [], isLoading: txLoading } = useTransactions({
+    branchName: selectedBranch !== "all" ? selectedBranch : undefined,
+  });
+  const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedBranch);
 
   const isLoading = txLoading || overviewLoading;
 
@@ -195,12 +221,69 @@ export default function AdminOverviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-900">
-          Welcome back, {session?.user?.worker_name ?? "Admin"}
-        </h1>
-        <p className="text-sm text-zinc-500 mt-0.5">{today}</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-900">
+            Welcome back, {session?.user?.worker_name ?? "Admin"}
+          </h1>
+          <p className="text-sm text-zinc-500 mt-0.5">{today}</p>
+        </div>
       </div>
+
+      {/* Branch selector tabs for central control & single-branch auditing */}
+      {branches.length > 1 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            <button
+              type="button"
+              onClick={() => setSelectedBranch("all")}
+              className={cn(
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer border shadow-xs",
+                selectedBranch === "all"
+                  ? "bg-zinc-900 text-white border-zinc-900"
+                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
+              )}
+            >
+              <Store className="h-3.5 w-3.5" />
+              All Branches (Collective)
+            </button>
+            {branches.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setSelectedBranch(b.branch_name)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer border shadow-xs",
+                  selectedBranch === b.branch_name
+                    ? "bg-zinc-900 text-white border-zinc-900"
+                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
+                )}
+              >
+                <Store className="h-3.5 w-3.5" />
+                {b.branch_name} {b.is_main && "(Main)"}
+              </button>
+            ))}
+          </div>
+
+          {selectedBranch !== "all" && (
+            <div className="flex items-center justify-between bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-4 py-2 text-xs">
+              <div className="flex items-center gap-2 text-emerald-900 font-medium">
+                <Store className="h-4 w-4 text-emerald-700 shrink-0" />
+                <span>
+                  Auditing individual branch: <strong className="font-bold text-emerald-950">{selectedBranch}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedBranch("all")}
+                className="text-emerald-700 hover:text-emerald-950 font-semibold underline underline-offset-2 cursor-pointer"
+              >
+                Reset to All Branches
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-zinc-400 text-sm py-10 justify-center">
@@ -353,20 +436,50 @@ export default function AdminOverviewPage() {
           </div>
 
           {overview && overview.low_stock_items.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-3"> {/* noqa */}
-                <AlertTriangle className="h-4 w-4" />
-                Restock soon
-              </h2>
-              <div className="flex flex-wrap gap-2">
+            <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-5 shadow-2xs">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  Low Stock & Depleted Branches
+                </h2>
+                <Link
+                  href="/dashboard/admin/inventory"
+                  className="text-xs font-medium text-amber-800 hover:text-amber-950 underline underline-offset-2"
+                >
+                  Manage inventory
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                 {overview.low_stock_items.map((item) => (
                   <Link
                     key={item.id}
                     href="/dashboard/admin/inventory"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-white border border-amber-200 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors" // noqa
+                    className="flex flex-col gap-1.5 rounded-lg bg-white border border-amber-200/90 p-3 text-xs hover:border-amber-400 hover:shadow-xs transition-all"
                   >
-                    {item.product_name}
-                    <span className="text-amber-500">· {item.amount_available} left</span> {/* noqa */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-zinc-900 truncate">{item.product_name}</span>
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-bold shrink-0",
+                          item.amount_available <= 0
+                            ? "bg-red-50 text-red-700 border border-red-200"
+                            : "bg-amber-100/80 text-amber-800 border border-amber-200"
+                        )}
+                      >
+                        {item.amount_available <= 0 ? "Out of stock" : `${item.amount_available} left`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-zinc-100">
+                      <span className="inline-flex items-center gap-1 text-zinc-600 font-medium">
+                        <Store className="h-3 w-3 text-zinc-400" />
+                        {item.branch_name || "Main Branch"}
+                      </span>
+                      {item.total_shop_quantity != null && (
+                        <span className="text-zinc-500">
+                          Total across branches: <strong className="text-zinc-900 font-bold">{item.total_shop_quantity}</strong>
+                        </span>
+                      )}
+                    </div>
                   </Link>
                 ))}
               </div>

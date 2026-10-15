@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { StockValuationCards } from "@/components/inventory/stock-valuation-cards"
 
 interface InventoryItem {
   _id: string
@@ -181,29 +182,11 @@ export default function WorkerInventoryPage() {
         </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs">
-          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Product Lines</span>
-          <p className="mt-2 text-2xl font-bold text-zinc-900">{inventory.length}</p>
-          <p className="text-xs text-zinc-400 mt-1">Available at this branch</p>
-        </div>
-
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs">
-          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total Units in Stock</span>
-          <p className="mt-2 text-2xl font-bold text-zinc-900">{totalStockUnits}</p>
-          <p className="text-xs text-zinc-400 mt-1">Physical stock count</p>
-        </div>
-
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs">
-          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Low Stock Items</span>
-          <div className="flex items-center gap-2 mt-2">
-            <p className="text-2xl font-bold text-amber-600">{lowStockCount}</p>
-            {lowStockCount > 0 && <AlertTriangle className="h-5 w-5 text-amber-500" />}
-          </div>
-          <p className="text-xs text-zinc-400 mt-1">Items below {LOW_STOCK_THRESHOLD} units</p>
-        </div>
-      </div>
+      {/* Executive Stock Valuation Dashboard */}
+      <StockValuationCards
+        inventory={inventory}
+        selectedBranch={branchName}
+      />
 
       {/* Add Product Form */}
       {showAddForm && (

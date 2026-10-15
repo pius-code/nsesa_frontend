@@ -39,6 +39,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ChangePasswordModal } from "@/components/shared/change-password-modal";
+import { TutorialsHubModal, GuidedTourOverlay, TOUR_STEPS } from "@/components/shared/tutorial-tour";
+import { Sparkles } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -159,15 +161,17 @@ function BranchSwitcher({
 
   if (!canSwitch || branches.length <= 1) {
     return (
-      <p className="text-[11px] text-green-200/80 tracking-wide font-medium flex items-center gap-1.5 mt-0.5">
-        <Store className="h-3 w-3 shrink-0 text-green-300/80" />
-        <span className="truncate">{activeBranch}</span>
-      </p>
+      <div data-tour="branch-switcher">
+        <p className="text-[11px] text-green-200/80 tracking-wide font-medium flex items-center gap-1.5 mt-0.5">
+          <Store className="h-3 w-3 shrink-0 text-green-300/80" />
+          <span className="truncate">{activeBranch}</span>
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="relative mt-1" ref={ref}>
+    <div data-tour="branch-switcher" className="relative mt-1" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -248,25 +252,25 @@ function ShopIdentity({
   const initial = shopName.trim().charAt(0).toUpperCase();
 
   return (
-    <div className="px-5 py-5 bg-gradient-to-br from-green-800 to-green-950 text-white">
+    <div data-tour="shop-brand" className="px-4 py-3.5 bg-gradient-to-br from-green-800 to-green-950 text-white">
       <div className="flex items-center gap-3 min-w-0">
         {shopImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={shopImage}
             alt={shopName}
-            className="h-11 w-11 rounded-xl object-cover shrink-0 ring-2 ring-white/15"
+            className="h-9 w-9 rounded-lg object-cover shrink-0 ring-2 ring-white/15"
           />
         ) : (
           <div
-            className="h-11 w-11 rounded-xl shrink-0 flex items-center justify-center font-heading font-bold text-lg text-white ring-2 ring-white/15"
+            className="h-9 w-9 rounded-lg shrink-0 flex items-center justify-center font-heading font-bold text-sm text-white ring-2 ring-white/15"
             style={{ backgroundColor: `hsl(${hue}, 55%, 40%)` }}
           >
             {initial}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="font-heading font-bold text-[15px] leading-tight truncate capitalize">
+          <p className="font-heading font-bold text-sm leading-tight truncate capitalize">
             {shopName}
           </p>
           <BranchSwitcher
@@ -295,6 +299,7 @@ function SidebarContent({
   onSwitchBranch,
   onOpenProfile,
   onOpenChangePassword,
+  onOpenTutorials,
   onNavigate,
 }: {
   session: Session;
@@ -309,6 +314,7 @@ function SidebarContent({
   onSwitchBranch: (branchName: string | null) => void;
   onOpenProfile?: () => void;
   onOpenChangePassword?: () => void;
+  onOpenTutorials?: () => void;
   onNavigate?: () => void;
 }) {
   return (
@@ -322,20 +328,38 @@ function SidebarContent({
         onSwitch={onSwitchBranch}
       />
 
-      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
+      <nav className="flex-1 min-h-0 overflow-y-auto space-y-0.5 px-2.5 py-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
           const isWorkers = item.label === "Workers";
           const showBadge = isWorkers && pendingResetsCount > 0;
 
+          const tourId =
+            item.label === "Transactions" || item.label === "New Transaction"
+              ? "nav-transaction"
+              : item.label === "Inventory"
+              ? "nav-inventory"
+              : item.label === "View Transactions"
+              ? "nav-transactions-list"
+              : item.label === "Send SMS"
+              ? "nav-broadcast"
+              : item.label === "Financial Reports" || item.label === "Overview"
+              ? "nav-reports"
+              : item.label === "Workers"
+              ? "nav-workers"
+              : item.label === "Branches"
+              ? "nav-branches"
+              : undefined;
+
           return (
             <Link
               key={item.href}
               href={item.href}
+              data-tour={tourId}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                 isActive
                   ? "bg-green-50 text-green-800 font-semibold"
                   : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
@@ -357,45 +381,59 @@ function SidebarContent({
 
       <Separator />
 
-      <div className="px-4 py-4 space-y-2">
-        <div className="px-3 mb-2">
-          <p className="text-sm font-medium text-zinc-900 truncate">
+      <div className="px-3 py-2 space-y-0.5">
+        <div className="px-2.5 mb-1">
+          <p className="text-xs font-semibold text-zinc-900 truncate">
             {session.user.worker_name}
           </p>
-          <p className="text-xs text-zinc-500 capitalize">
+          <p className="text-[11px] text-zinc-500 capitalize">
             {(session.user as { role_label?: string }).role_label || session.user.worker_role?.replace("_", " ")}
           </p>
         </div>
 
         <button
-          onClick={onOpenProfile}
-          className="flex w-full items-center justify-between rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer"
+          type="button"
+          onClick={onOpenTutorials}
+          className="flex w-full items-center justify-between rounded-full px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/60 shadow-xs transition-colors cursor-pointer group"
         >
-          <div className="flex items-center gap-3">
-            <User className="h-4 w-4 text-zinc-400" />
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600 group-hover:rotate-12 transition-transform" />
+            <span>Tutorials & Tour</span>
+          </div>
+          <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-full">
+            Guide
+          </span>
+        </button>
+
+        <button
+          onClick={onOpenProfile}
+          className="flex w-full items-center justify-between rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-2.5">
+            <User className="h-3.5 w-3.5 text-zinc-400" />
             <span>My Profile</span>
           </div>
           {isPhoneMissing && (
-            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Phone number missing" />
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" title="Phone number missing" />
           )}
         </button>
 
         <button
           onClick={onOpenChangePassword}
-          className="flex w-full items-center gap-3 rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer"
+          className="flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer"
         >
-          <KeyRound className="h-4 w-4 text-zinc-400" />
+          <KeyRound className="h-3.5 w-3.5 text-zinc-400" />
           Change Password
         </button>
 
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex w-full items-center gap-3 rounded-full px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+          className="flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-3.5 w-3.5" />
           Sign out
         </button>
-        <p className="px-3 pt-1 text-[10px] text-zinc-300">Powered by FJ Pay</p>
+        <p className="px-2.5 pt-0.5 text-[9px] text-zinc-300">Powered by FJ Pay</p>
       </div>
     </div>
   );
@@ -413,6 +451,29 @@ export function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [tutorialsOpen, setTutorialsOpen] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
+
+  // Friendly first-time prompt for new users
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem("nsesa_tour_seen");
+      if (!seen) {
+        const timer = setTimeout(() => {
+          toast("👋 Welcome to your Shop Portal!", {
+            description: "Want a quick 1-minute guided tour of your core features?",
+            action: {
+              label: "Start Tour",
+              onClick: () => setTourActive(true),
+            },
+            duration: 9000,
+          });
+          localStorage.setItem("nsesa_tour_seen", "prompted");
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch {}
+  }, []);
   const navItems = getNavItems(session.user);
   const shopName = (session.user.worker_shop_name || "Shop").replace(/_/g, " ");
 
@@ -508,6 +569,7 @@ export function DashboardShell({
           onSwitchBranch={(name) => switchBranchMutation.mutate(name)}
           onOpenProfile={() => setProfileModalOpen(true)}
           onOpenChangePassword={() => setPasswordModalOpen(true)}
+          onOpenTutorials={() => setTutorialsOpen(true)}
         />
       </aside>
 
@@ -547,6 +609,10 @@ export function DashboardShell({
                     setMobileOpen(false);
                     setPasswordModalOpen(true);
                   }}
+                  onOpenTutorials={() => {
+                    setMobileOpen(false);
+                    setTutorialsOpen(true);
+                  }}
                   onNavigate={() => setMobileOpen(false)}
                 />
               </SheetContent>
@@ -556,8 +622,18 @@ export function DashboardShell({
             </span>
           </div>
 
-          {canSwitchBranch && branches.length > 1 && (
-            <div className="shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setTutorialsOpen(true)}
+              className="h-8 px-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg gap-1"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Tour</span>
+            </Button>
+            {canSwitchBranch && branches.length > 1 && (
               <BranchSwitcher
                 activeBranch={activeBranch}
                 branches={branches}
@@ -565,8 +641,8 @@ export function DashboardShell({
                 isPending={switchBranchMutation.isPending}
                 onSwitch={(name) => switchBranchMutation.mutate(name)}
               />
-            </div>
-          )}
+            )}
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -643,6 +719,33 @@ export function DashboardShell({
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         onOpenChangePassword={() => setPasswordModalOpen(true)}
+      />
+
+      <TutorialsHubModal
+        open={tutorialsOpen}
+        onClose={() => setTutorialsOpen(false)}
+        onStartTour={() => {
+          setTutorialsOpen(false);
+          setTourActive(true);
+        }}
+      />
+
+      <GuidedTourOverlay
+        isOpen={tourActive}
+        onClose={() => {
+          setTourActive(false);
+          setMobileOpen(false);
+        }}
+        onStepChange={(step) => {
+          if (typeof window !== "undefined" && window.innerWidth < 1024) {
+            const isSidebarItem =
+              step.targetSelector.includes("shop-brand") ||
+              step.targetSelector.includes("branch-switcher") ||
+              step.targetSelector.includes("nav-");
+            setMobileOpen(isSidebarItem);
+          }
+        }}
+        steps={TOUR_STEPS}
       />
     </div>
   );

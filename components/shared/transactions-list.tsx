@@ -65,12 +65,13 @@ export interface TransactionFilters {
   endDate?: string;
   processedBy?: string;
   status?: string;
+  branchName?: string;
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
-  const { startDate, endDate, processedBy, status } = filters;
+  const { startDate, endDate, processedBy, status, branchName } = filters;
   return useQuery<Transaction[]>({
-    queryKey: ["transactions", startDate, endDate, processedBy, status],
+    queryKey: ["transactions", startDate, endDate, processedBy, status, branchName],
     queryFn: async () => {
       const { data } = await api.get("/api/v1/return_my_shop_transactions", {
         params: {
@@ -78,6 +79,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
           end_date: endDate || undefined,
           processed_by: processedBy || undefined,
           status: status || undefined,
+          branch_name: branchName && branchName !== "all" ? branchName : undefined,
         },
       });
       return data;
