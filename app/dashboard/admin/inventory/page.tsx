@@ -169,6 +169,7 @@ export default function InventoryPage() {
   // Find registered main branch name
   const mainBranchObj = branches.find((b) => b.is_main)
   const defaultMainBranchName = mainBranchObj?.branch_name || "Main Branch"
+  const effectiveDefaultBranch = selectedBranch !== "all" ? selectedBranch : defaultMainBranchName
 
   const normalizeBranch = (name?: string | null) => {
     if (!name || name.trim() === "" || name.toLowerCase() === "main" || name.toLowerCase() === "main branch") {
@@ -286,7 +287,7 @@ export default function InventoryPage() {
         cost_price: costPrice ? parseFloat(costPrice) : null,
         amount_available: parseInt(amountAvailable),
         sku: sku.trim() || null,
-        branch_name: branchName.trim() || null,
+        branch_name: (branchName || effectiveDefaultBranch).trim() || null,
         category_id: categoryId || null,
         supplier_name: supplierName.trim() || null,
         supplier_contact: supplierContact.trim() || null,
@@ -391,6 +392,64 @@ export default function InventoryPage() {
     a.href = url
     a.download = "inventory-import-template.csv"
     a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportStockToCSV() {
+    if (!inventory || inventory.length === 0) return
+
+    const headers = [
+      "Product Name",
+      "SKU",
+      "Category",
+      "Branch",
+      "Quantity in Stock",
+      "Retail Price (GHS)",
+      "Cost Price (GHS)",
+      "Retail Stock Value (GHS)",
+      "Capital Cost Value (GHS)",
+      "Supplier Name",
+      "Supplier Contact",
+    ]
+
+    const escapeCSV = (val: string | number | null | undefined) => {
+      if (val === null || val === undefined) return '""'
+      const str = String(val).replace(/"/g, '""')
+      return `"${str}"`
+    }
+
+    const rows = inventory.map((it) => {
+      const qty = it.amount_available || 0
+      const retailPrice = it.product_price || 0
+      const costPrice = it.cost_price || 0
+      const branch = normalizeBranch(it.branch_name)
+
+      return [
+        escapeCSV(it.product_name),
+        escapeCSV(it.sku ?? ""),
+        escapeCSV(it.category_name ?? ""),
+        escapeCSV(branch),
+        escapeCSV(qty),
+        escapeCSV(retailPrice.toFixed(2)),
+        escapeCSV(it.cost_price != null ? costPrice.toFixed(2) : ""),
+        escapeCSV((qty * retailPrice).toFixed(2)),
+        escapeCSV(it.cost_price != null ? (qty * costPrice).toFixed(2) : ""),
+        escapeCSV(it.supplier_name ?? ""),
+        escapeCSV(it.supplier_contact ?? ""),
+      ].join(",")
+    })
+
+    const csvContent = [headers.join(","), ...rows].join("\r\n")
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    const branchSlug = selectedBranch === "all" ? "all-branches" : selectedBranch.toLowerCase().replace(/\s+/g, "-")
+    const dateStr = new Date().toISOString().slice(0, 10)
+    a.download = `inventory-stock-${branchSlug}-${dateStr}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 
@@ -510,6 +569,17 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            onClick={exportStockToCSV}
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5"
+            disabled={inventory.length === 0}
+            title="Export stock data to Excel / CSV"
+          >
+            <Download className="h-4 w-4" />
+            Export Stock
+          </Button>
           <Button
             onClick={() => {
               setShowBulkImport((v) => !v)
@@ -677,12 +747,22 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="branch_name">Branch Assignment</Label>
-              <Input
+              <select
                 id="branch_name"
-                placeholder="e.g. Main Branch"
-                value={branchName}
+                value={branchName || effectiveDefaultBranch}
                 onChange={(e) => setBranchName(e.target.value)}
-              />
+                className="w-full h-10 px-3 rounded-lg border border-zinc-300 bg-white text-sm text-zinc-900 focus:outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 cursor-pointer"
+              >
+                {branches.length === 0 ? (
+                  <option value={defaultMainBranchName}>{defaultMainBranchName}</option>
+                ) : (
+                  branches.map((b) => (
+                    <option key={b.id} value={b.branch_name}>
+                      {b.branch_name} {b.is_main ? "(Main Branch)" : ""}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
           </div>
 

@@ -22,6 +22,7 @@ import {
   Smartphone,
   Banknote,
   Building2,
+  Store,
   CreditCard,
   Plus,
   Minus,
@@ -58,6 +59,7 @@ export interface Transaction {
   status: string;
   created_at: string;
   at_shop: string;
+  branch_name?: string | null;
 }
 
 export interface TransactionFilters {
@@ -65,7 +67,7 @@ export interface TransactionFilters {
   endDate?: string;
   processedBy?: string;
   status?: string;
-  branchName?: string;
+  branchName?: string | null;
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
@@ -82,6 +84,23 @@ export function useTransactions(filters: TransactionFilters = {}) {
           branch_name: branchName && branchName !== "all" ? branchName : undefined,
         },
       });
+      return data;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+interface BranchOption {
+  id: string;
+  branch_name: string;
+  is_main: boolean;
+}
+
+function useBranches() {
+  return useQuery<BranchOption[]>({
+    queryKey: ["branches"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/branches");
       return data;
     },
     staleTime: 60 * 1000,
@@ -846,6 +865,15 @@ function TransactionCard({ tx, canManage }: { tx: Transaction; canManage: boolea
           </span>
           <span>•</span>
           <span>by {tx.processed_by}</span>
+          {tx.branch_name && (
+            <>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1 text-zinc-600 font-medium">
+                <Store className="h-3 w-3 text-zinc-400" />
+                {tx.branch_name}
+              </span>
+            </>
+          )}
           <span className="ml-auto text-zinc-400">
             {open ? (
               <ChevronUp className="h-3.5 w-3.5" />
@@ -880,17 +908,35 @@ export function TransactionsList() {
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   // Default to Today for immediate daily brief insight
+  const { data: branches = [] } = useBranches();
+  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>;
+  const isGlobal = Boolean(perms?.is_global || canManage);
+  const workerBranch = session?.user?.worker_branch_name;
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [processedBy, setProcessedBy] = useState("");
   const [status, setStatus] = useState("");
+  const [branchName, setBranchName] = useState("all");
 
-  const filters: TransactionFilters = { startDate, endDate, processedBy, status };
+  const effectiveBranchFilter = isGlobal
+    ? (branchName !== "all" ? branchName : undefined)
+    : workerBranch;
+
+  const filters: TransactionFilters = {
+    startDate,
+    endDate,
+    processedBy,
+    status,
+    branchName: effectiveBranchFilter || undefined,
+  };
+
   const hasActiveFilters = Boolean(
     (startDate && startDate !== todayStr) ||
     (endDate && endDate !== todayStr) ||
     processedBy ||
-    status
+    status ||
+    (isGlobal && branchName !== "all")
   );
 
   const { data: rawTransactions = [], isLoading, isError } = useTransactions(filters);
@@ -992,6 +1038,7 @@ export function TransactionsList() {
     setEndDate("");
     setProcessedBy("");
     setStatus("");
+    if (isGlobal) setBranchName("all");
   }
 
   return (
@@ -1152,7 +1199,24 @@ export function TransactionsList() {
 
       {/* Advanced Filters */}
       <div className="bg-white rounded-xl border border-zinc-200 px-4 py-4 shadow-2xs">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {isGlobal && branches.length > 1 && (
+            <div className="space-y-1">
+              <Label className="text-xs">Branch</Label>
+              <select
+                value={branchName}
+                onChange={(e) => setBranchName(e.target.value)}
+                className={SELECT_CLASS}
+              >
+                <option value="all">All Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.branch_name}>
+                    {b.branch_name} {b.is_main ? "(Main)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="space-y-1">
             <Label className="text-xs">From Date</Label>
             <Input
