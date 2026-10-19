@@ -1,6 +1,12 @@
 "use client"
 
+import { toast } from "sonner"
+import { getErrorMessage } from "@/lib/utils"
 import { useMemo, useRef, useState } from "react"
+
+function errorMessage(err: unknown, fallback: string): string {
+  return getErrorMessage(err, fallback)
+}
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   CheckCircle2,
@@ -47,7 +53,7 @@ interface InventoryItem {
 
 interface StockLog {
   _id: string
-  movement_type: "RESTOCK" | "SALE" | "REFUND" | "TRANSFER_IN" | "TRANSFER_OUT" | "ADJUSTMENT" | "DAMAGE" | "AUDIT"
+  movement_type: "INITIAL" | "RESTOCK" | "SALE" | "REFUND" | "TRANSFER_IN" | "TRANSFER_OUT" | "ADJUSTMENT" | "DAMAGE" | "AUDIT"
   quantity_change: number
   previous_quantity: number
   new_quantity: number
@@ -218,6 +224,8 @@ export default function InventoryPage() {
   const [success, setSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [allowDuplicate, setAllowDuplicate] = useState(false)
+
   // Add form fields
   const [productName, setProductName] = useState("")
   const [productPrice, setProductPrice] = useState("")
@@ -228,6 +236,23 @@ export default function InventoryPage() {
   const [categoryId, setCategoryId] = useState("")
   const [supplierName, setSupplierName] = useState("")
   const [supplierContact, setSupplierContact] = useState("")
+
+  // Detect duplicate in target branch
+  const targetBranchClean = (branchName || effectiveDefaultBranch).trim().toLowerCase()
+  const trimmedProductName = productName.trim().toLowerCase()
+
+  const duplicateItem = useMemo(() => {
+    if (!trimmedProductName || !targetBranchClean) return null
+    return (
+      inventory.find((item) => {
+        const itemBranch = (item.branch_name || defaultMainBranchName).trim().toLowerCase()
+        return (
+          item.product_name.trim().toLowerCase() === trimmedProductName &&
+          itemBranch === targetBranchClean
+        )
+      }) || null
+    )
+  }, [trimmedProductName, targetBranchClean, inventory, defaultMainBranchName])
 
   // Edit form state (NO direct quantity overwrite)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -296,6 +321,7 @@ export default function InventoryPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      toast.success("Product added to inventory successfully!")
       setSuccess(true)
       setProductName("")
       setBranchName("")
@@ -308,6 +334,9 @@ export default function InventoryPage() {
       setSupplierContact("")
       setShowForm(false)
       setTimeout(() => setSuccess(false), 4000)
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Failed to add product to inventory. Please try again."))
     },
   })
 
@@ -326,7 +355,11 @@ export default function InventoryPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      toast.success("Product details updated successfully!")
       cancelEdit()
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Failed to update product details"))
     },
   })
 
@@ -342,7 +375,11 @@ export default function InventoryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       queryClient.invalidateQueries({ queryKey: ["stock-logs"] })
+      toast.success("Stock updated successfully!")
       closeRestockModal()
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Failed to restock inventory"))
     },
   })
 
@@ -353,7 +390,11 @@ export default function InventoryPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      toast.success("Product deleted successfully")
       setDeletingId(null)
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Failed to delete product"))
     },
   })
 
@@ -596,6 +637,7 @@ export default function InventoryPage() {
             onClick={() => {
               setShowForm((v) => !v)
               setShowBulkImport(false)
+              setAllowDuplicate(false)
             }}
             variant={showForm ? "outline" : "default"}
             size="sm"
@@ -787,6 +829,61 @@ export default function InventoryPage() {
             </div>
           </div>
 
+          {/* Branch-Specific Duplicate Warning Card styled after reference UI */}
+          {duplicateItem && !allowDuplicate && (
+            <div className="flex items-start gap-3.5 rounded-2xl bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-orange-50/30 border border-amber-200/60 p-4 shadow-xs">
+              <div className="h-9 w-9 rounded-full bg-white shadow-xs border border-amber-100 flex items-center justify-center shrink-0">
+                <span className="h-5 w-5 rounded-full bg-amber-400 text-white flex items-center justify-center text-xs font-bold leading-none select-none">
+                  !
+                </span>
+              </div>
+              <div className="space-y-2 flex-1 pt-0.5">
+                <div>
+                  <h4 className="text-sm font-semibold text-zinc-900 leading-tight">
+                    &quot;{duplicateItem.product_name}&quot; already exists in {duplicateItem.branch_name || defaultMainBranchName}
+                  </h4>
+                  <p className="text-xs text-zinc-600 leading-relaxed mt-0.5">
+                    This branch already has <strong>{duplicateItem.amount_available} units</strong> in stock (Selling Price: GH₵{duplicateItem.product_price.toFixed(2)}). Would you like to restock or edit the existing product instead?
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs h-8"
+                    onClick={() => {
+                      setShowForm(false)
+                      openRestockModal(duplicateItem)
+                    }}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                    Restock Existing Product
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-8"
+                    onClick={() => {
+                      setShowForm(false)
+                      startEdit(duplicateItem)
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    Edit Existing Product
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setAllowDuplicate(true)}
+                    className="text-xs text-zinc-500 hover:text-zinc-800 underline ml-auto cursor-pointer"
+                  >
+                    Create separate duplicate anyway
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -795,7 +892,10 @@ export default function InventoryPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={addMutation.isPending}>
+            <Button
+              type="submit"
+              disabled={addMutation.isPending || (!!duplicateItem && !allowDuplicate)}
+            >
               {addMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1181,7 +1281,9 @@ export default function InventoryPage() {
                           <span
                             className={cn(
                               "px-2 py-0.5 rounded text-[10px] uppercase font-bold",
-                              log.movement_type === "RESTOCK"
+                              log.movement_type === "INITIAL"
+                                ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                : log.movement_type === "RESTOCK"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : log.movement_type === "SALE"
                                 ? "bg-blue-100 text-blue-800"
@@ -1190,7 +1292,7 @@ export default function InventoryPage() {
                                 : "bg-purple-100 text-purple-800"
                             )}
                           >
-                            {log.movement_type}
+                            {log.movement_type === "INITIAL" ? "INITIAL STOCK" : log.movement_type}
                           </span>
                           <span className={isPositive ? "text-emerald-700 font-bold" : "text-zinc-700 font-bold"}>
                             {isPositive ? `+${log.quantity_change}` : log.quantity_change} units

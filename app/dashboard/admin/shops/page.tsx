@@ -14,6 +14,7 @@ import {
   Ban,
   Trash2,
   RotateCcw,
+  KeyRound,
   X,
   Check,
   Building2,
@@ -137,61 +138,152 @@ function StatusBadge({ status }: { status: Shop["status"] }) {
   return <Badge variant="destructive" className="capitalize">Deleted</Badge>
 }
 
-type ActionMode = "suspend" | "delete" | null
+type ActionMode = "suspend" | "delete" | "reset_password" | null
 
 function ShopActions({ shop }: { shop: Shop }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<ActionMode>(null)
   const [reason, setReason] = useState("")
+  const [newPassword, setNewPassword] = useState("")
 
   function reset() {
     setMode(null)
     setReason("")
+    setNewPassword("")
   }
 
   const suspendMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/api/v1/shops/${shop.shop_name}/suspend`, { reason })
+      const encoded = encodeURIComponent(shop.shop_name)
+      const { data } = await api.post(`/api/v1/shops/${encoded}/suspend`, { reason })
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all_shops"] })
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["all_shops"] })
+      queryClient.setQueriesData<ShopsResponse>({ queryKey: ["all_shops"] }, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          shops: old.shops.map((s) =>
+            s.shop_name === shop.shop_name ? { ...s, status: "suspended", status_reason: reason } : s
+          ),
+        }
+      })
+    },
+    onSuccess: async () => {
       toast.success(`${shop.shop_name} suspended`)
       reset()
+      await queryClient.refetchQueries({ queryKey: ["all_shops"], type: "active" })
     },
     onError: (err) => {
+      queryClient.invalidateQueries({ queryKey: ["all_shops"] })
       toast.error(errorMessage(err, "Failed to suspend shop"))
     },
   })
 
   const reactivateMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/api/v1/shops/${shop.shop_name}/reactivate`)
+      const encoded = encodeURIComponent(shop.shop_name)
+      const { data } = await api.post(`/api/v1/shops/${encoded}/reactivate`)
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all_shops"] })
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["all_shops"] })
+      queryClient.setQueriesData<ShopsResponse>({ queryKey: ["all_shops"] }, (old) => {
+        if (!old) return old
+        // Instantly remove from the current list (e.g. from deleted tab) or mark active
+        const remaining = old.shops.filter((s) => s.shop_name !== shop.shop_name)
+        return {
+          ...old,
+          total_shops: Math.max(0, old.total_shops - 1),
+          shops: remaining,
+        }
+      })
+    },
+    onSuccess: async () => {
       toast.success(`${shop.shop_name} reactivated`)
+      await queryClient.refetchQueries({ queryKey: ["all_shops"], type: "active" })
     },
     onError: (err) => {
+      queryClient.invalidateQueries({ queryKey: ["all_shops"] })
       toast.error(errorMessage(err, "Failed to reactivate shop"))
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.delete(`/api/v1/shops/${shop.shop_name}`, { data: { reason } })
+      const encoded = encodeURIComponent(shop.shop_name)
+      const { data } = await api.delete(`/api/v1/shops/${encoded}`, { data: { reason } })
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all_shops"] })
+    onMutate: async () => {
+      // Optimistic instant removal: immediately vanishes from the screen with 0ms delay!
+      await queryClient.cancelQueries({ queryKey: ["all_shops"] })
+      queryClient.setQueriesData<ShopsResponse>({ queryKey: ["all_shops"] }, (old) => {
+        if (!old) return old
+        const remaining = old.shops.filter((s) => s.shop_name !== shop.shop_name)
+        return {
+          ...old,
+          total_shops: Math.max(0, old.total_shops - 1),
+          shops: remaining,
+        }
+      })
+    },
+    onSuccess: async () => {
       toast.success(`${shop.shop_name} deleted`)
       reset()
+      await queryClient.refetchQueries({ queryKey: ["all_shops"], type: "active" })
     },
     onError: (err) => {
+      queryClient.invalidateQueries({ queryKey: ["all_shops"] })
       toast.error(errorMessage(err, "Failed to delete shop"))
     },
   })
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async () => {
+      const encoded = encodeURIComponent(shop.shop_name)
+      const { data } = await api.post(`/api/v1/super-admin/shops/${encoded}/reset-password`, {
+        new_password: newPassword,
+        reason: reason.trim() || "Super Admin reset",
+      })
+      return data
+    },
+    onSuccess: () => {
+      toast.success(`Password for ${shop.shop_name} admin updated successfully!`)
+      reset()
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Failed to reset shop password"))
+    },
+  })
+
+  if (mode === "reset_password") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="text"
+          placeholder="New shop password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="h-8 text-xs w-44"
+          autoFocus
+        />
+        <Button
+          size="sm"
+          className="h-8 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+          onClick={() => resetPasswordMutation.mutate()}
+          disabled={resetPasswordMutation.isPending || newPassword.trim().length < 4}
+          title="Save new password"
+        >
+          {resetPasswordMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={reset}>
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+    )
+  }
 
   if (mode === "suspend") {
     return (
@@ -245,48 +337,109 @@ function ShopActions({ shop }: { shop: Shop }) {
     )
   }
 
+  if (shop.status === "suspended") {
+    return (
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          onClick={() => setMode("reset_password")}
+          title="Reset Shop Owner Password"
+        >
+          <KeyRound className="h-3.5 w-3.5 sm:mr-1" />
+          <span className="hidden sm:inline">Reset Pwd</span>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 text-xs text-emerald-700 hover:bg-emerald-50 border-emerald-200"
+          onClick={() => reactivateMutation.mutate()}
+          disabled={reactivateMutation.isPending}
+          title="Reactivate Shop"
+        >
+          {reactivateMutation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5 sm:mr-1" />
+          )}
+          <span className="hidden sm:inline">Reactivate</span>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0"
+          onClick={() => setMode("delete")}
+          title="Delete Shop"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    )
+  }
+
   if (shop.status === "active") {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          onClick={() => setMode("reset_password")}
+          title="Reset Shop Owner Password"
+        >
+          <KeyRound className="h-3.5 w-3.5 sm:mr-1" />
+          <span className="hidden sm:inline">Reset Pwd</span>
+        </Button>
         <Button
           type="button"
           size="sm"
           variant="outline"
           className="h-8 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
           onClick={() => setMode("suspend")}
+          title="Suspend Shop"
         >
-          <Ban className="h-3 w-3 mr-1" />
-          Suspend
+          <Ban className="h-3.5 w-3.5 sm:mr-1" />
+          <span className="hidden sm:inline">Suspend</span>
         </Button>
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="h-8 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0"
           onClick={() => setMode("delete")}
+          title="Delete Shop"
         >
-          <Trash2 className="h-3 w-3" />
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
     )
   }
 
+  // Deleted shops
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      className="h-8 px-2.5 text-xs text-green-700 hover:bg-green-50"
-      onClick={() => reactivateMutation.mutate()}
-      disabled={reactivateMutation.isPending}
-    >
-      {reactivateMutation.isPending ? (
-        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-      ) : (
-        <RotateCcw className="h-3 w-3 mr-1" />
-      )}
-      Reactivate
-    </Button>
+    <div className="flex items-center gap-1.5 shrink-0">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 px-2.5 text-xs text-emerald-700 hover:bg-emerald-50 border-emerald-200"
+        onClick={() => reactivateMutation.mutate()}
+        disabled={reactivateMutation.isPending}
+        title="Reactivate Shop"
+      >
+        {reactivateMutation.isPending ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1" />
+        ) : (
+          <RotateCcw className="h-3.5 w-3.5 sm:mr-1" />
+        )}
+        <span className="hidden sm:inline">Reactivate</span>
+      </Button>
+    </div>
   )
 }
 
@@ -519,15 +672,22 @@ function ShopDetailsModal({
 
 export default function ShopsPage() {
   const [page, setPage] = useState(1)
+  const [activeTab, setActiveTab] = useState<"active" | "deleted">("active")
   const [selectedShopName, setSelectedShopName] = useState<string | null>(null)
 
+  const handleTabChange = (tab: "active" | "deleted") => {
+    setActiveTab(tab)
+    setPage(1)
+  }
+
   const { data, isLoading, isError } = useQuery<ShopsResponse>({
-    queryKey: ["all_shops", page],
+    queryKey: ["all_shops", page, activeTab],
     queryFn: async () => {
-      const { data } = await api.get(`/api/v1/all_shops?page=${page}&limit=${LIMIT}`)
+      const statusParam = activeTab === "deleted" ? "&status=deleted" : ""
+      const { data } = await api.get(`/api/v1/all_shops?page=${page}&limit=${LIMIT}${statusParam}`)
       return data
     },
-    staleTime: 60 * 1000,
+    staleTime: 0,
   })
 
   const shops = data?.shops ?? []
@@ -544,11 +704,41 @@ export default function ShopsPage() {
         </p>
       </div>
 
+      {/* Section View Tabs */}
+      <div className="flex items-center gap-2 border-b border-zinc-200 pb-2">
+        <button
+          type="button"
+          onClick={() => handleTabChange("active")}
+          className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+            activeTab === "active"
+              ? "bg-zinc-900 text-white shadow-xs"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <Store className="h-4 w-4" />
+          Active & Suspended Shops
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange("deleted")}
+          className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+            activeTab === "deleted"
+              ? "bg-red-600 text-white shadow-xs"
+              : "text-zinc-600 hover:text-red-600 hover:bg-red-50"
+          }`}
+        >
+          <Trash2 className="h-4 w-4" />
+          Deleted Accounts
+        </button>
+      </div>
+
       {/* Summary card */}
       {!isLoading && !isError && (
         <div className="w-fit">
           <div className="bg-white rounded-xl border border-zinc-200 px-5 py-4 shadow-xs">
-            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Total Registered Shops</p>
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+              {activeTab === "deleted" ? "Total Deleted Accounts" : "Total Platform Shops"}
+            </p>
             <p className="text-3xl font-bold text-zinc-900 mt-1">{totalShops}</p>
           </div>
         </div>
@@ -570,8 +760,17 @@ export default function ShopsPage() {
 
       {!isLoading && !isError && shops.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white py-20 text-center">
-          <Store className="h-10 w-10 text-zinc-300 mb-3" />
-          <p className="text-sm font-medium text-zinc-500">No shops yet</p>
+          {activeTab === "deleted" ? (
+            <>
+              <Trash2 className="h-10 w-10 text-zinc-300 mb-3" />
+              <p className="text-sm font-medium text-zinc-500">No deleted shops in the archive</p>
+            </>
+          ) : (
+            <>
+              <Store className="h-10 w-10 text-zinc-300 mb-3" />
+              <p className="text-sm font-medium text-zinc-500">No active shops yet</p>
+            </>
+          )}
         </div>
       )}
 
@@ -579,24 +778,24 @@ export default function ShopsPage() {
       {shops.length > 0 && (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-xs">
-            <table className="w-full">
+          <div className="hidden md:block bg-white rounded-xl border border-zinc-200 overflow-x-auto shadow-xs">
+            <table className="w-full min-w-[760px]">
               <thead className="border-b border-zinc-200 bg-zinc-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Shop</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Admin</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">Branches</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">Workers</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">SMS Sent</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Shop</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Admin</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">Branches</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">Workers</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">SMS Sent</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {shops.map((shop) => (
                   <tr key={`${shop.shop_name}-${shop.admin_email}`} className="hover:bg-zinc-50 transition-colors align-middle">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2.5">
                         <ShopAvatar shop={shop} />
                         <div>
                           <button
@@ -610,36 +809,36 @@ export default function ShopsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <p className="text-sm font-medium text-zinc-800">{shop.admin_name}</p>
                       <p className="text-xs text-zinc-400">{shop.admin_email}</p>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-700">
+                    <td className="px-2 py-3 text-center">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
                         <Building2 className="h-3 w-3 text-zinc-500" />
                         {shop.branch_count ?? 1}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-600">
+                    <td className="px-2 py-3 text-center">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">
                         <Users className="h-3 w-3" />
                         {shop.worker_count}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                    <td className="px-2 py-3 text-center">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
                         <MessageSquare className="h-3 w-3 text-blue-600" />
                         {shop.sms_sent_count ?? 0}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <StatusBadge status={shop.status} />
                       {shop.status !== "active" && shop.status_reason && (
-                        <p className="text-xs text-zinc-400 mt-1 max-w-[14rem] truncate">{shop.status_reason}</p>
+                        <p className="text-xs text-zinc-400 mt-1 max-w-[12rem] truncate">{shop.status_reason}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5 shrink-0">
                         <Button
                           size="sm"
                           variant="outline"

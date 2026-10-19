@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios"
 import { getErrorMessage } from "@/lib/utils";
@@ -14,7 +14,7 @@ import { ImageUpload } from "@/components/ui/image-upload";
 interface RegisterPayload {
   worker_name: string;
   worker_shop_name: string;
-  worker_branch_name: string;
+  worker_branch_name?: string;
   worker_role: string;
   worker_email: string;
   worker_phone: string;
@@ -26,13 +26,15 @@ export default function RegisterPage() {
   const [form, setForm] = useState<RegisterPayload>({
     worker_name: "",
     worker_shop_name: "",
-    worker_branch_name: "",
-    worker_role: "worker",
+    worker_role: "admin",
     worker_email: "",
     worker_phone: "",
     worker_password: "",
     worker_shop_image: "",
   });
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   function set(field: keyof RegisterPayload, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -48,25 +50,27 @@ export default function RegisterPage() {
       setForm({
         worker_name: "",
         worker_shop_name: "",
-        worker_branch_name: "",
-        worker_role: "worker",
+        worker_role: "admin",
         worker_email: "",
         worker_phone: "",
         worker_password: "",
         worker_shop_image: "",
       });
+      setConfirmPassword("");
     },
     onError: (err: unknown) => {
       toast.error(getErrorMessage(err, "Registration failed. Please try again."));
     },
   });
 
+  const passwordsMatch = form.worker_password === confirmPassword;
   const canSubmit =
     form.worker_name.trim() &&
     form.worker_shop_name.trim() &&
-    form.worker_branch_name.trim() &&
     form.worker_email.trim() &&
-    form.worker_password.trim() &&
+    form.worker_password.trim().length >= 8 &&
+    confirmPassword.trim() &&
+    passwordsMatch &&
     !mutation.isPending;
 
   return (
@@ -119,31 +123,20 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="worker_shop_name">
-                Shop Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="worker_shop_name"
-                placeholder="e.g. plabsindustry"
-                value={form.worker_shop_name}
-                onChange={(e) => set("worker_shop_name", e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="worker_branch_name">
-                Branch Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="worker_branch_name"
-                placeholder="e.g. main"
-                value={form.worker_branch_name}
-                onChange={(e) => set("worker_branch_name", e.target.value)}
-                required
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="worker_shop_name">
+              Shop Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="worker_shop_name"
+              placeholder="e.g. Acme Enterprise"
+              value={form.worker_shop_name}
+              onChange={(e) => set("worker_shop_name", e.target.value)}
+              required
+            />
+            <p className="text-xs text-zinc-500">
+              The business owner will be prompted to set up their primary main branch upon first login.
+            </p>
           </div>
         </div>
 
@@ -177,18 +170,71 @@ export default function RegisterPage() {
             />
           </div>
 
+          {/* Password with Eye Toggle */}
           <div className="space-y-1.5">
             <Label htmlFor="worker_password">
               Password <span className="text-red-500">*</span>
             </Label>
-            <Input
-              id="worker_password"
-              type="password"
-              placeholder="Min. 8 characters"
-              value={form.worker_password}
-              onChange={(e) => set("worker_password", e.target.value)}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="worker_password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Min. 8 characters"
+                value={form.worker_password}
+                onChange={(e) => set("worker_password", e.target.value)}
+                className="pr-10"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
+                tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Confirm Password with Eye Toggle */}
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm_password">
+              Confirm Password <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirm_password"
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Re-enter password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="pr-10"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
+                tabIndex={-1}
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {confirmPassword.length > 0 && (
+              <div className="flex items-center gap-1.5 pt-0.5 text-xs">
+                {passwordsMatch ? (
+                  <span className="text-emerald-600 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Passwords match
+                  </span>
+                ) : (
+                  <span className="text-red-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-3.5 w-3.5" /> Passwords do not match
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -28,6 +28,7 @@ import {
   Check,
   Building2,
   ArrowLeftRight,
+  Loader2,
 } from "lucide-react";
 import { WorkerProfileModal } from "@/components/shared/worker-profile-modal";
 import { signOut } from "next-auth/react";
@@ -439,6 +440,129 @@ function SidebarContent({
   );
 }
 
+function MandatoryMainBranchModal({ shopName }: { shopName: string }) {
+  const queryClient = useQueryClient();
+  const [branchName, setBranchName] = useState("");
+  const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post("/api/v1/branches", {
+        branch_name: branchName.trim(),
+        location: location.trim() || undefined,
+        phone: phone.trim() || undefined,
+        is_main: true,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Main branch established successfully!");
+      queryClient.invalidateQueries({ queryKey: ["branches"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["overview"] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err, "Failed to create main branch"));
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center text-green-700 shrink-0">
+            <Building2 className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 leading-tight">Welcome to {shopName}!</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Setup your first branch to get started</p>
+          </div>
+        </div>
+
+        {/* Friendly notification card styled after reference UI */}
+        <div className="flex items-start gap-3.5 rounded-2xl bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-orange-50/30 border border-amber-200/60 p-4 shadow-xs">
+          <div className="h-9 w-9 rounded-full bg-white shadow-xs border border-amber-100 flex items-center justify-center shrink-0">
+            <span className="h-5 w-5 rounded-full bg-amber-400 text-white flex items-center justify-center text-xs font-bold leading-none select-none">
+              !
+            </span>
+          </div>
+          <div className="space-y-1 pt-0.5">
+            <h4 className="text-sm font-semibold text-zinc-900 leading-tight">
+              Branch setup required
+            </h4>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Every shop is required to create at least one branch to get started. Set up your main branch below to start adding inventory, recording sales, and inviting your team.
+            </p>
+          </div>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (branchName.trim() && !createMutation.isPending) {
+              createMutation.mutate();
+            }
+          }}
+          className="space-y-4"
+        >
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-700 flex items-center gap-1">
+              Main Branch Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Main Branch, Central Store, HQ"
+              value={branchName}
+              onChange={(e) => setBranchName(e.target.value)}
+              className="w-full h-10 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-600/10"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-700">Location / Address (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. Osu Oxford Street, Accra"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full h-10 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-600/10"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-700">Branch Phone (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. 0244123456"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full h-10 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-600/10"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!branchName.trim() || createMutation.isPending}
+            className="w-full h-11 rounded-lg bg-green-700 hover:bg-green-800 text-white font-semibold text-sm transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {createMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Creating Branch...</span>
+              </>
+            ) : (
+              <span>Establish Main Branch & Begin</span>
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardShell({
   session,
   children,
@@ -509,7 +633,7 @@ export function DashboardShell({
   });
 
   // Fetch shop branches
-  const { data: branches = [] } = useQuery<BranchOption[]>({
+  const { data: branches = [], isLoading: isBranchesLoading } = useQuery<BranchOption[]>({
     queryKey: ["branches"],
     queryFn: async () => {
       const { data } = await api.get("/api/v1/branches");
@@ -517,6 +641,11 @@ export function DashboardShell({
     },
     staleTime: 60000,
   });
+
+  const isBranchSetupRequired =
+    role !== "super_admin" &&
+    !isBranchesLoading &&
+    branches.length === 0;
 
   const isPhoneMissing = profile !== undefined && (!profile?.worker_phone || profile.worker_phone.trim() === "");
 
@@ -747,6 +876,11 @@ export function DashboardShell({
         }}
         steps={TOUR_STEPS}
       />
+
+      {/* Mandatory Main Branch Setup Guard */}
+      {isBranchSetupRequired && (
+        <MandatoryMainBranchModal shopName={shopName} />
+      )}
     </div>
   );
 }
