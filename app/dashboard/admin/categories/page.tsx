@@ -34,8 +34,9 @@ export default function CategoriesPage() {
   const { data: categories = [], isLoading, isError } = useCategories()
   const { data: session } = useSession()
   const role = session?.user?.worker_role
-  const canEdit = role === "admin" || role === "super_admin"
-  const canDelete = role === "super_admin"
+  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>
+  const canEdit = role === "admin" || role === "super_admin" || !!perms?.can_add_categories
+  const canDelete = role === "admin" || role === "super_admin" || !!perms?.can_add_categories
 
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")

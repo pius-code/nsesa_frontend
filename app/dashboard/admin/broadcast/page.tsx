@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const SMS_SEGMENT_LENGTH = 160;
+const EMPTY_RECIPIENTS: Recipient[] = [];
 
 type Target = "customers" | "shop_admins";
 
@@ -120,14 +121,45 @@ export default function BroadcastPage() {
   const { data: branches = [] } = useBranches();
   const { data, isLoading } = useRecipientCount(target, selectedBranch);
   const recipientCount = data?.recipient_count ?? 0;
-  const recipients = data?.recipients ?? [];
+  const rawRecipients = data?.recipients;
+  const recipients = rawRecipients ?? EMPTY_RECIPIENTS;
 
   const [searchFilter, setSearchFilter] = useState("");
   const [showRecipientsList, setShowRecipientsList] = useState(true);
   const [message, setMessage] = useState("");
   const [confirming, setConfirming] = useState(false);
 
-  const segments = Math.max(1, Math.ceil(message.length / SMS_SEGMENT_LENGTH));
+  // Recipient selection state
+  const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (rawRecipients && rawRecipients.length > 0) {
+      setSelectedPhones(rawRecipients.map((r) => r.phone));
+    } else {
+      setSelectedPhones([]);
+    }
+  }, [rawRecipients]);
+
+  const allSelected = recipients.length > 0 && selectedPhones.length === recipients.length;
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedPhones([]);
+    } else {
+      setSelectedPhones(recipients.map((r) => r.phone));
+    }
+  }
+
+  function toggleRecipient(phone: string) {
+    setSelectedPhones((prev) =>
+      prev.includes(phone) ? prev.filter((p) => p !== phone) : [...prev, phone]
+    );
+  }
+
+  const shopName = (session?.user as any)?.worker_shop_name || "Our Shop";
+  const brandingFooter = target === "customers" ? `\n\nSent from ${shopName} via FJ Pay` : "\n\nSent via FJ Pay Platform";
+  const fullLength = message.trim() ? (message.trim() + brandingFooter).length : 0;
+  const segments = Math.max(1, Math.ceil((fullLength || message.length) / SMS_SEGMENT_LENGTH));
 
   const filteredRecipients = recipients.filter((r) => {
     if (!searchFilter.trim()) return true;
@@ -144,7 +176,10 @@ export default function BroadcastPage() {
         target === "customers"
           ? "/api/v1/broadcast/sms"
           : "/api/v1/broadcast/shop-admins/sms";
-      const payload: { message: string; branch_name?: string } = { message: message.trim() };
+      const payload: { message: string; branch_name?: string; selected_phones?: string[] } = {
+        message: message.trim(),
+        selected_phones: selectedPhones,
+      };
       if (target === "customers" && selectedBranch !== "all") {
         payload.branch_name = selectedBranch;
       }
@@ -344,7 +379,7 @@ export default function BroadcastPage() {
                   Estimated: <strong className="text-zinc-800">{segments} SMS segment{segments !== 1 ? "s" : ""}</strong> per recipient
                 </span>
                 <span className="text-zinc-400">
-                  Total SMS: <strong className="text-zinc-800">{segments * recipientCount}</strong> messages
+                  Total SMS: <strong className="text-zinc-800">{segments * selectedPhones.length}</strong> messages
                 </span>
               </div>
             </div>
@@ -355,11 +390,13 @@ export default function BroadcastPage() {
                 type="button"
                 size="lg"
                 className="w-full bg-green-700 hover:bg-green-800 text-white gap-2 font-semibold shadow-sm"
-                disabled={message.trim().length < 3 || recipientCount === 0}
+                disabled={message.trim().length < 3 || selectedPhones.length === 0}
                 onClick={() => setConfirming(true)}
               >
                 <Send className="h-4 w-4" />
-                Proceed to Send Broadcast
+                {selectedPhones.length === 0
+                  ? "Select at least 1 recipient"
+                  : `Proceed to Send to ${selectedPhones.length} Recipient${selectedPhones.length !== 1 ? "s" : ""}`}
               </Button>
             ) : (
               <div className="rounded-2xl bg-amber-50/90 border border-amber-200 p-5 space-y-3">
@@ -370,9 +407,9 @@ export default function BroadcastPage() {
                       Confirm SMS Broadcast Dispatch
                     </p>
                     <p className="text-xs text-amber-800 mt-1">
-                      Are you sure you want to send this SMS to all{" "}
-                      <strong className="font-bold underline">{recipientCount}</strong>{" "}
-                      {target === "customers" ? "customers" : "shop admins"}? This action cannot be reversed.
+                      Are you sure you want to send this SMS to the{" "}
+                      <strong className="font-bold underline">{selectedPhones.length}</strong> selected{" "}
+                      {target === "customers" ? "customer(s)" : "shop admin(s)"}? This action cannot be reversed.
                     </p>
                   </div>
                 </div>
@@ -436,9 +473,14 @@ export default function BroadcastPage() {
                 </div>
 
                 <div className="flex-1 flex flex-col justify-end">
-                  <div className="bg-green-100/90 text-green-950 p-3 rounded-2xl rounded-bl-xs text-xs font-sans leading-relaxed shadow-2xs">
+                  <div className="bg-green-100/90 text-green-950 p-3 rounded-2xl rounded-bl-xs text-xs font-sans leading-relaxed shadow-2xs whitespace-pre-line">
                     {message.trim() ? (
-                      message
+                      <>
+                        <span>{message.trim()}</span>
+                        <span className="block mt-2 text-[10px] text-green-800 font-semibold border-t border-green-200/80 pt-1 opacity-90">
+                          {target === "customers" ? `Sent from ${shopName} via FJ Pay` : "Sent via FJ Pay Platform"}
+                        </span>
+                      </>
                     ) : (
                       <span className="text-zinc-400 italic">
                         Type your message on the left to see live preview…
@@ -459,12 +501,23 @@ export default function BroadcastPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-heading font-semibold text-zinc-900 text-sm">
-                    Recipients ({recipients.length})
+                    Recipients ({selectedPhones.length} of {recipients.length} selected)
                   </h3>
                   <p className="text-xs text-zinc-500">
-                    Customers receiving this SMS broadcast
+                    Select who receives this SMS broadcast
                   </p>
                 </div>
+                {recipients.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAll}
+                    className="text-xs h-7 px-2.5 rounded-lg border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {allSelected ? "Deselect All" : "Select All"}
+                  </Button>
+                )}
               </div>
 
               {recipients.length > 0 ? (
@@ -489,9 +542,20 @@ export default function BroadcastPage() {
                         const colorClass = getAvatarColor(name);
                         const initial = name.charAt(0).toUpperCase();
 
+                        const isSelected = selectedPhones.includes(rec.phone);
                         return (
-                          <div key={idx} className="py-2.5 flex items-center justify-between gap-3">
+                          <div
+                            key={idx}
+                            onClick={() => toggleRecipient(rec.phone)}
+                            className="py-2.5 px-1.5 flex items-center justify-between gap-3 hover:bg-zinc-50 rounded-xl cursor-pointer transition-colors"
+                          >
                             <div className="flex items-center gap-2.5 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="h-4 w-4 rounded-md border-zinc-300 text-green-700 focus:ring-green-600/20 cursor-pointer"
+                              />
                               <div
                                 className={cn(
                                   "h-7 w-7 rounded-full text-white flex items-center justify-center text-xs font-bold shrink-0",

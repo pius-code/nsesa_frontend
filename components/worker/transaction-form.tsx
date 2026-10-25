@@ -53,7 +53,7 @@ function useInventory() {
       const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory")
       return data
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
   })
 }
 
@@ -86,6 +86,14 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
   const [selectedProductId, setSelectedProductId] = useState("")
   const [qty, setQty] = useState<string>("1")
   const [cart, setCart] = useState<CartItem[]>([])
+
+  // Ensure cart never retains products from an old branch after switching
+  useEffect(() => {
+    if (cart.length > 0 && inventory.length > 0) {
+      const validProductIds = new Set(inventory.map((p) => p._id))
+      setCart((prev) => prev.filter((item) => validProductIds.has(item.product_id)))
+    }
+  }, [inventory])
 
   const [searchQuery, setSearchQuery] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)

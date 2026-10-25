@@ -409,7 +409,15 @@ interface AvailableProduct {
   is_available: boolean;
 }
 
-function ManagePanel({ tx }: { tx: Transaction }) {
+function ManagePanel({
+  tx,
+  canManage,
+  canEdit,
+}: {
+  tx: Transaction;
+  canManage: boolean;
+  canEdit: boolean;
+}) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<ActionMode>(null);
   const [reason, setReason] = useState("");
@@ -572,20 +580,24 @@ function ManagePanel({ tx }: { tx: Transaction }) {
         className="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <Button type="button" size="sm" variant="outline" onClick={startEdit}>
-          <Pencil className="h-3.5 w-3.5 mr-1" />
-          Edit Receipt
-        </Button>
-        {tx.status === "success" && (
+        {canEdit && (
+          <Button type="button" size="sm" variant="outline" onClick={startEdit}>
+            <Pencil className="h-3.5 w-3.5 mr-1" />
+            Edit Receipt
+          </Button>
+        )}
+        {canManage && tx.status === "success" && (
           <Button type="button" size="sm" variant="outline" onClick={() => setMode("refund")}>
             <RotateCcw className="h-3.5 w-3.5 mr-1" />
             Refund
           </Button>
         )}
-        <Button type="button" size="sm" variant="destructive" onClick={() => setMode("delete")}>
-          <Trash2 className="h-3.5 w-3.5 mr-1" />
-          Delete
-        </Button>
+        {canManage && (
+          <Button type="button" size="sm" variant="destructive" onClick={() => setMode("delete")}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete
+          </Button>
+        )}
       </div>
     );
   }
@@ -773,7 +785,15 @@ function ManagePanel({ tx }: { tx: Transaction }) {
   );
 }
 
-function TransactionRow({ tx, canManage }: { tx: Transaction; canManage: boolean }) {
+function TransactionRow({
+  tx,
+  canManage,
+  canEdit,
+}: {
+  tx: Transaction;
+  canManage: boolean;
+  canEdit: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -819,8 +839,8 @@ function TransactionRow({ tx, canManage }: { tx: Transaction; canManage: boolean
             <ItemsTable items={tx.items} />
             <TransactionNote note={tx.note} />
             <ReceiptActions tx={tx} />
-            {canManage && <TransactionLogs transactionId={tx._id} />}
-            {canManage && <ManagePanel tx={tx} />}
+            {(canManage || canEdit) && <TransactionLogs transactionId={tx._id} />}
+            {(canManage || canEdit) && <ManagePanel tx={tx} canManage={canManage} canEdit={canEdit} />}
           </td>
         </tr>
       )}
@@ -828,7 +848,15 @@ function TransactionRow({ tx, canManage }: { tx: Transaction; canManage: boolean
   );
 }
 
-function TransactionCard({ tx, canManage }: { tx: Transaction; canManage: boolean }) {
+function TransactionCard({
+  tx,
+  canManage,
+  canEdit,
+}: {
+  tx: Transaction;
+  canManage: boolean;
+  canEdit: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-2xs">
@@ -888,8 +916,8 @@ function TransactionCard({ tx, canManage }: { tx: Transaction; canManage: boolea
           <ItemsTable items={tx.items} />
           <TransactionNote note={tx.note} />
           <ReceiptActions tx={tx} />
-          {canManage && <TransactionLogs transactionId={tx._id} />}
-          {canManage && <ManagePanel tx={tx} />}
+          {(canManage || canEdit) && <TransactionLogs transactionId={tx._id} />}
+          {(canManage || canEdit) && <ManagePanel tx={tx} canManage={canManage} canEdit={canEdit} />}
         </div>
       )}
     </div>
@@ -903,13 +931,15 @@ export function TransactionsList() {
   const { data: session } = useSession();
   const isWorker = session?.user?.worker_role === "worker";
   const shopName = session?.user?.worker_shop_name;
-  const canManage = session?.user?.worker_role === "admin" || session?.user?.worker_role === "super_admin";
+  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>;
+  const isAdmin = session?.user?.worker_role === "admin" || session?.user?.worker_role === "super_admin";
+  const canManage = isAdmin || !!perms?.can_manage_orders;
+  const canEdit = isAdmin || !!perms?.can_manage_orders || !!perms?.can_edit_transaction;
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   // Default to Today for immediate daily brief insight
   const { data: branches = [] } = useBranches();
-  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>;
   const isGlobal = Boolean(perms?.is_global || canManage);
   const workerBranch = session?.user?.worker_branch_name;
 
@@ -1314,7 +1344,7 @@ export function TransactionsList() {
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {transactions.map((tx) => (
-                  <TransactionRow key={tx._id} tx={tx} canManage={canManage} />
+                  <TransactionRow key={tx._id} tx={tx} canManage={canManage} canEdit={canEdit} />
                 ))}
               </tbody>
             </table>
@@ -1323,7 +1353,7 @@ export function TransactionsList() {
           {/* Mobile Cards */}
           <div className="flex md:hidden flex-col gap-3">
             {transactions.map((tx) => (
-              <TransactionCard key={tx._id} tx={tx} canManage={canManage} />
+              <TransactionCard key={tx._id} tx={tx} canManage={canManage} canEdit={canEdit} />
             ))}
           </div>
         </>

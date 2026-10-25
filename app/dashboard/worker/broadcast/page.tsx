@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const SMS_SEGMENT_LENGTH = 160;
+const EMPTY_RECIPIENTS: Recipient[] = [];
 
 interface Recipient {
   name?: string | null;
@@ -104,7 +105,34 @@ export default function WorkerBroadcastPage() {
 
   const { data: countData, isLoading: countLoading } = useBranchRecipientCount(canSms);
   const recipientCount = countData?.recipient_count ?? 0;
-  const recipients = countData?.recipients ?? [];
+  const rawRecipients = countData?.recipients;
+  const recipients = rawRecipients ?? EMPTY_RECIPIENTS;
+
+  const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (rawRecipients && rawRecipients.length > 0) {
+      setSelectedPhones(rawRecipients.map((r) => r.phone));
+    } else {
+      setSelectedPhones([]);
+    }
+  }, [rawRecipients]);
+
+  const allSelected = recipients.length > 0 && selectedPhones.length === recipients.length;
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedPhones([]);
+    } else {
+      setSelectedPhones(recipients.map((r) => r.phone));
+    }
+  }
+
+  function toggleRecipient(phone: string) {
+    setSelectedPhones((prev) =>
+      prev.includes(phone) ? prev.filter((p) => p !== phone) : [...prev, phone]
+    );
+  }
 
   const charCount = message.length;
   const segments = Math.ceil(charCount / SMS_SEGMENT_LENGTH) || 1;
@@ -118,6 +146,7 @@ export default function WorkerBroadcastPage() {
       const { data } = await api.post("/api/v1/broadcast/sms", {
         message: message.trim(),
         branch_name: branchName,
+        selected_phones: selectedPhones,
       });
       return data;
     },
@@ -223,16 +252,18 @@ export default function WorkerBroadcastPage() {
               {!confirming ? (
                 <Button
                   onClick={() => setConfirming(true)}
-                  disabled={!message.trim() || recipientCount === 0 || countLoading}
+                  disabled={!message.trim() || selectedPhones.length === 0 || countLoading}
                   className="w-full h-11 text-sm font-semibold"
                 >
                   <Send className="h-4 w-4 mr-1.5" />
-                  Review & Send to {recipientCount} Branch Customer{recipientCount !== 1 ? "s" : ""}
+                  {selectedPhones.length === 0
+                    ? "Select at least 1 customer"
+                    : `Review & Send to ${selectedPhones.length} Branch Customer${selectedPhones.length !== 1 ? "s" : ""}`}
                 </Button>
               ) : (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3">
                   <p className="text-sm font-medium text-green-900">
-                    Ready to send to <strong>{recipientCount}</strong> customer{recipientCount !== 1 ? "s" : ""} of <strong>{branchName}</strong>?
+                    Ready to send to <strong>{selectedPhones.length}</strong> selected customer{selectedPhones.length !== 1 ? "s" : ""} of <strong>{branchName}</strong>?
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -264,9 +295,22 @@ export default function WorkerBroadcastPage() {
                 <Users className="h-4 w-4 text-zinc-500" />
                 <h3 className="text-sm font-bold text-zinc-900">Branch Audience</h3>
               </div>
-              <Badge variant="secondary" className="font-semibold text-zinc-700">
-                {countLoading ? "..." : `${recipientCount} total`}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="font-semibold text-zinc-700">
+                  {countLoading ? "..." : `${selectedPhones.length} of ${recipientCount}`}
+                </Badge>
+                {recipients.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleAll}
+                    className="text-xs h-6 px-1.5 text-zinc-600 hover:text-zinc-900"
+                  >
+                    {allSelected ? "Deselect" : "Select All"}
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Search */}
@@ -292,17 +336,30 @@ export default function WorkerBroadcastPage() {
               </p>
             ) : (
               <div className="divide-y divide-zinc-100 max-h-80 overflow-y-auto pr-1">
-                {filteredRecipients.map((r, i) => (
-                  <div key={i} className="py-2 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${getAvatarColor(r.name || "Customer")}`}>
-                        {(r.name || "C").charAt(0).toUpperCase()}
-                      </span>
-                      <span className="font-medium text-zinc-800">{r.name || "Walk-in Customer"}</span>
+                {filteredRecipients.map((r, i) => {
+                  const isSelected = selectedPhones.includes(r.phone);
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => toggleRecipient(r.phone)}
+                      className="py-2 px-1 flex items-center justify-between text-xs hover:bg-zinc-50 rounded-lg cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="h-3.5 w-3.5 rounded border-zinc-300 text-green-700 focus:ring-green-600/20 cursor-pointer"
+                        />
+                        <span className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${getAvatarColor(r.name || "Customer")}`}>
+                          {(r.name || "C").charAt(0).toUpperCase()}
+                        </span>
+                        <span className="font-medium text-zinc-800">{r.name || "Walk-in Customer"}</span>
+                      </div>
+                      <span className="font-mono text-zinc-500 text-[11px]">{r.phone}</span>
                     </div>
-                    <span className="font-mono text-zinc-500 text-[11px]">{r.phone}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

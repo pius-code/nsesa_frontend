@@ -77,7 +77,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!reloginRequired) return
     if (reloginCountdown <= 0) {
-      signOut({ callbackUrl: "/login" })
+      signOut({ redirect: false }).finally(() => { window.location.href = "/login"; })
       return
     }
     const timer = setTimeout(() => {
@@ -329,7 +329,7 @@ export default function SettingsPage() {
             </div>
 
             <Button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => signOut({ redirect: false }).finally(() => { window.location.href = "/login"; })}
               className="w-full bg-zinc-900 hover:bg-zinc-800 text-white"
             >
               <LogOut className="h-4 w-4 mr-2" />

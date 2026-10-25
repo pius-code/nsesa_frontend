@@ -48,6 +48,7 @@ const PERM_LABELS: Record<string, string> = {
   can_manage_orders: "Order Management",
   view_own_transactions: "View Own Txns",
   view_all_transactions: "View All Txns",
+  can_edit_transaction: "Edit Transactions",
   can_add_inventory: "Add Products",
   can_update_stock: "Restock Inventory",
   can_add_others: "Manage Workers",

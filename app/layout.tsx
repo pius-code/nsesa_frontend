@@ -27,20 +27,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${bodyFont.variable} ${headingFont.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">
+      <body className="h-full overflow-hidden font-sans bg-zinc-50 text-zinc-900">
         <Providers>{children}</Providers>
         <Toaster
           position="top-right"
+          closeButton
+          richColors
           toastOptions={{
             classNames: {
               toast:
-                "backdrop-blur-md !bg-white/80 !border !border-zinc-200 !shadow-lg !rounded-xl !font-sans",
+                "backdrop-blur-md !bg-white/95 !border !border-zinc-200 !shadow-lg !rounded-xl !font-sans !pr-10",
               success:
-                "!bg-green-50/90 !border-green-200 !text-green-900",
+                "!bg-emerald-50/95 !border-emerald-200 !text-emerald-950",
               error:
-                "!bg-red-50/90 !border-red-200 !text-red-900",
+                "!bg-rose-50/95 !border-rose-200 !text-rose-950",
               title: "!text-sm !font-semibold",
-              description: "!text-xs !opacity-70",
+              description: "!text-xs !opacity-75",
+              closeButton:
+                "!left-auto !right-2.5 !top-2.5 !transform-none !bg-white hover:!bg-zinc-100 !border !border-zinc-200 !text-zinc-600 hover:!text-zinc-900 !h-6 !w-6 !opacity-90 hover:!opacity-100 !shadow-xs !transition-all !cursor-pointer",
             },
           }}
         />

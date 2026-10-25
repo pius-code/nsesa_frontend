@@ -17,6 +17,9 @@ import {
   ChevronUp,
   KeyRound,
   MoreHorizontal,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import api from "@/lib/axios"
@@ -33,6 +36,7 @@ interface WorkerPermissions {
   can_manage_orders: boolean
   view_own_transactions: boolean
   view_all_transactions: boolean
+  can_edit_transaction: boolean
   can_add_inventory: boolean
   can_update_stock: boolean
   can_add_others: boolean
@@ -90,6 +94,7 @@ const PERM_GROUPS = [
     items: [
       { key: "view_own_transactions", label: "View own transactions", description: "Can see their own transactions" },
       { key: "view_all_transactions", label: "View all transactions", description: "Can see every transaction in the shop" },
+      { key: "can_edit_transaction", label: "Can edit transactions", description: "Edit items and details on existing transactions" },
     ],
   },
   {
@@ -147,6 +152,7 @@ const DEFAULT_PERMS: WorkerPermissions = {
   can_manage_orders: false,
   view_own_transactions: true,
   view_all_transactions: false,
+  can_edit_transaction: false,
   can_add_inventory: false,
   can_update_stock: false,
   can_add_others: false,
@@ -210,9 +216,13 @@ function PermCheckbox({
   onChange: (key: string, val: boolean) => void
 }) {
   return (
-    <label
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={() => onChange(permKey, !checked)}
       className={cn(
-        "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all select-none",
+        "w-full text-left flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
         checked
           ? "border-indigo-300 bg-indigo-50"
           : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50"
@@ -232,17 +242,11 @@ function PermCheckbox({
           )}
         </div>
       </div>
-      <input
-        type="checkbox"
-        className="sr-only"
-        checked={checked}
-        onChange={(e) => onChange(permKey, e.target.checked)}
-      />
       <div className="min-w-0">
         <p className={cn("text-sm font-medium", checked ? "text-indigo-900" : "text-zinc-700")}>{label}</p>
         <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
       </div>
-    </label>
+    </button>
   )
 }
 
@@ -285,6 +289,7 @@ function PermissionsPanel({
 const PERM_BADGE_LABELS: Record<string, string> = {
   can_sell: "Sell",
   can_manage_orders: "Orders",
+  can_edit_transaction: "Edit Txns",
   view_all_transactions: "All Txns",
   can_add_inventory: "Inventory",
   can_update_stock: "Restock",
@@ -454,6 +459,9 @@ export default function WorkersPage() {
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [branchName, setBranchName] = useState("")
   const [newPerms, setNewPerms] = useState<WorkerPermissions>(DEFAULT_PERMS)
   const [showPermPanel, setShowPermPanel] = useState(false)
@@ -532,6 +540,9 @@ export default function WorkersPage() {
   // Create worker
   const createMutation = useMutation({
     mutationFn: async () => {
+      if (password !== confirmPassword) {
+        throw new Error("Passwords do not match.")
+      }
       const val = validatePassword(password)
       if (!val.isValid) {
         throw new Error(
@@ -553,6 +564,7 @@ export default function WorkersPage() {
       queryClient.invalidateQueries({ queryKey: ["workers"] })
       showToast("success", "Worker created successfully!")
       setName(""); setRoleLabel(""); setBranchName(""); setEmail(""); setPhone(""); setPassword("")
+      setConfirmPassword(""); setShowPassword(false); setShowConfirmPassword(false)
       setNewPerms(DEFAULT_PERMS); setShowForm(false); setShowPermPanel(false)
     },
     onError: (err: unknown) => {
@@ -704,9 +716,54 @@ export default function WorkersPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="w-password">Password *</Label>
-              <Input id="w-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Temporary password" />
+              <div className="relative">
+                <Input
+                  id="w-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min 8 characters (letters, numbers, symbols)"
+                  className="pr-10 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
+
             <div className="space-y-1.5">
+              <Label htmlFor="w-confirm-password">Confirm Password *</Label>
+              <div className="relative">
+                <Input
+                  id="w-confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className={cn(
+                    "pr-10 text-sm",
+                    confirmPassword && password !== confirmPassword && "border-rose-400 focus-visible:ring-rose-300"
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer"
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="w-branch">Branch</Label>
               {branches.length > 0 ? (
                 <select
@@ -726,6 +783,50 @@ export default function WorkersPage() {
             </div>
           </div>
 
+          {/* Password Validation & Match Guidance (Mobile Responsive) */}
+          {(password.length > 0 || confirmPassword.length > 0) && (() => {
+            const val = validatePassword(password)
+            const isMatch = password.length > 0 && password === confirmPassword
+            return (
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3.5 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-zinc-700">Password Requirements:</span>
+                  {val.isValid && isMatch ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> All requirements met
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-[11px]">
+                  <div className={cn("flex items-center gap-1.5", val.checks.minLength ? "text-emerald-600 font-medium" : "text-zinc-500")}>
+                    <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", val.checks.minLength ? "text-emerald-500" : "text-zinc-300")} />
+                    <span>8+ characters</span>
+                  </div>
+                  <div className={cn("flex items-center gap-1.5", (val.checks.hasLetter && val.checks.hasNumber) ? "text-emerald-600 font-medium" : "text-zinc-500")}>
+                    <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", (val.checks.hasLetter && val.checks.hasNumber) ? "text-emerald-500" : "text-zinc-300")} />
+                    <span>Alphanumeric (letters &amp; numbers)</span>
+                  </div>
+                  <div className={cn("flex items-center gap-1.5", val.checks.hasSymbol ? "text-emerald-600 font-medium" : "text-zinc-500")}>
+                    <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", val.checks.hasSymbol ? "text-emerald-500" : "text-zinc-300")} />
+                    <span>At least 1 symbol (!@#$%^&amp;*)</span>
+                  </div>
+                  <div className={cn("flex items-center gap-1.5", isMatch ? "text-emerald-600 font-medium" : confirmPassword ? "text-rose-600 font-medium" : "text-zinc-500")}>
+                    <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", isMatch ? "text-emerald-500" : confirmPassword ? "text-rose-400" : "text-zinc-300")} />
+                    <span>Passwords match</span>
+                  </div>
+                </div>
+
+                {confirmPassword.length > 0 && !isMatch && (
+                  <div className="flex items-center gap-1.5 text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2 font-medium">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>Passwords do not match. Please re-enter carefully.</span>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Permissions accordion */}
           <div className="border border-zinc-200 rounded-xl overflow-hidden">
             <button
@@ -743,14 +844,31 @@ export default function WorkersPage() {
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={createMutation.isPending}>Cancel</Button>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={createMutation.isPending} className="w-full sm:w-auto">
+              Cancel
+            </Button>
             <Button
-              disabled={!name || !email || !password || createMutation.isPending}
+              disabled={
+                !name.trim() ||
+                !email.trim() ||
+                !password ||
+                !confirmPassword ||
+                password !== confirmPassword ||
+                !validatePassword(password).isValid ||
+                createMutation.isPending
+              }
               onClick={() => createMutation.mutate()}
-              className="bg-zinc-900 text-white hover:bg-zinc-700"
+              className="w-full sm:w-auto bg-zinc-900 text-white hover:bg-zinc-700 cursor-pointer"
             >
-              {createMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Creating...</> : <>Create Worker</>}
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  Creating...
+                </>
+              ) : (
+                <>Create Worker</>
+              )}
             </Button>
           </div>
         </div>

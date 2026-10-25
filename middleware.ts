@@ -9,6 +9,10 @@ function getFirstAllowedWorkerRoute(perms: Record<string, boolean>): string {
   if (perms.can_see_clients) return "/dashboard/worker/clients"
   if (perms.can_manage_expenses) return "/dashboard/worker/expenses"
   if (perms.can_sms_own_branch || perms.can_sms_all_branches) return "/dashboard/worker/broadcast"
+  if (perms.can_view_own_branch_report || perms.can_view_all_reports) return "/dashboard/admin/reports"
+  if (perms.can_add_categories) return "/dashboard/admin/categories"
+  if (perms.can_add_others) return "/dashboard/admin/workers"
+  if (perms.can_manage_branches) return "/dashboard/admin/branches"
   return "/dashboard/unauthorized"
 }
 
@@ -33,9 +37,17 @@ export default auth((req) => {
   const isAdminRole = ["admin", "super_admin", "owner", "manager"].includes(role || "")
   const perms = ((req.auth?.user?.permissions as unknown) || {}) as Record<string, boolean>
 
-  // Block non-admin staff from admin routes
+  // Block non-admin staff from admin routes unless explicitly permitted
   if (pathname.startsWith("/dashboard/admin") && !isAdminRole) {
-    return NextResponse.redirect(new URL(getFirstAllowedWorkerRoute(perms), req.url))
+    const isAllowedAdminRoute =
+      (pathname.startsWith("/dashboard/admin/reports") && (perms.can_view_own_branch_report || perms.can_view_all_reports)) ||
+      (pathname.startsWith("/dashboard/admin/categories") && perms.can_add_categories) ||
+      (pathname.startsWith("/dashboard/admin/workers") && perms.can_add_others) ||
+      (pathname.startsWith("/dashboard/admin/branches") && perms.can_manage_branches)
+
+    if (!isAllowedAdminRoute) {
+      return NextResponse.redirect(new URL(getFirstAllowedWorkerRoute(perms), req.url))
+    }
   }
 
   // Block non-super_admin from super_admin-only routes

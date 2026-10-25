@@ -30,11 +30,10 @@
   --font-mono: ui-monospace, "SFMono-Regular", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Maintain clean, consistent fintech light theme canvas across all system preferences */
+:root {
+  --background: #fafafa;
+  --foreground: #18181b;
 }
 
 body {
@@ -46,4 +45,43 @@ body {
 h1, h2, h3 {
   font-family: var(--font-heading), var(--font-body), sans-serif;
   letter-spacing: -0.02em;
+}
+
+/* Sonner Toast Close Button Placement & Visibility Fix */
+[data-sonner-toast] {
+  padding-right: 40px !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  left: auto !important;
+  right: 10px !important;
+  top: 10px !important;
+  transform: none !important;
+  opacity: 0.85 !important;
+  height: 24px !important;
+  width: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+  color: #52525b !important;
+  border-radius: 9999px !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  cursor: pointer !important;
+  z-index: 50 !important;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  opacity: 1 !important;
+  background: #f4f4f5 !important;
+  color: #18181b !important;
+}
+
+/* Viewport Lock: Prevent window-level scroll leakage and black background exposure */
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background-color: #fafafa;
 }

@@ -34,6 +34,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DateStripPicker } from "@/components/ui/date-strip-picker"
 import { StockValuationCards } from "@/components/inventory/stock-valuation-cards"
+import { parseCSVPreview, CSVPreviewResult } from "@/lib/csv-preview"
+import { CSVImportPreview } from "@/components/inventory/csv-import-preview"
 import { cn } from "@/lib/utils"
 
 interface InventoryItem {
@@ -102,7 +104,7 @@ function useInventory(branchName?: string) {
   return useQuery<InventoryItem[]>({
     queryKey: ["inventory", branchName],
     queryFn: async () => {
-      const params = branchName && branchName !== "all" ? { branch_name: branchName } : {}
+      const params = branchName ? { branch_name: branchName } : {}
       const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory", { params })
       return data
     },
@@ -221,6 +223,8 @@ export default function InventoryPage() {
   const [showForm, setShowForm] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
   const [bulkResult, setBulkResult] = useState<BulkImportResponse | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [csvPreview, setCsvPreview] = useState<CSVPreviewResult | null>(null)
   const [success, setSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -254,11 +258,12 @@ export default function InventoryPage() {
     )
   }, [trimmedProductName, targetBranchClean, inventory, defaultMainBranchName])
 
-  // Edit form state (NO direct quantity overwrite)
+  // Edit form state (allows direct quantity update/correction)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editPrice, setEditPrice] = useState("")
   const [editCostPrice, setEditCostPrice] = useState("")
+  const [editAmountAvailable, setEditAmountAvailable] = useState("")
   const [editSku, setEditSku] = useState("")
   const [editCategoryId, setEditCategoryId] = useState("")
   const [editSupplierName, setEditSupplierName] = useState("")
@@ -281,6 +286,7 @@ export default function InventoryPage() {
     setEditName(item.product_name)
     setEditPrice(String(item.product_price))
     setEditCostPrice(item.cost_price != null ? String(item.cost_price) : "")
+    setEditAmountAvailable(String(item.amount_available ?? 0))
     setEditSku(item.sku ?? "")
     setEditCategoryId(item.category_id ?? "")
     setEditSupplierName(item.supplier_name ?? "")
@@ -346,6 +352,7 @@ export default function InventoryPage() {
         product_name: editName.trim(),
         product_price: parseFloat(editPrice),
         cost_price: editCostPrice ? parseFloat(editCostPrice) : null,
+        amount_available: editAmountAvailable !== "" ? parseInt(editAmountAvailable) : undefined,
         sku: editSku.trim() || null,
         category_id: editCategoryId || null,
         supplier_name: editSupplierName.trim() || null,
@@ -410,7 +417,13 @@ export default function InventoryPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
       setBulkResult(data)
+      setPendingFile(null)
+      setCsvPreview(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
+      toast.success(`Bulk import completed: ${data.created} products imported!`)
+    },
+    onError: (err) => {
+      toast.error(errorMessage(err, "Bulk import failed"))
     },
   })
 
@@ -419,11 +432,36 @@ export default function InventoryPage() {
     addMutation.mutate()
   }
 
-  function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setBulkResult(null)
-    bulkImportMutation.mutate(file)
+
+    try {
+      const text = await file.text()
+      const preview = parseCSVPreview(text)
+      if (preview.missingRequired && preview.missingRequired.length > 0) {
+        toast.error(`Missing required columns: ${preview.missingRequired.join(", ")}`)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
+      }
+      setPendingFile(file)
+      setCsvPreview(preview)
+    } catch {
+      toast.error("Failed to read CSV file. Please make sure it is valid.")
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  function handleCancelPreview() {
+    setPendingFile(null)
+    setCsvPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  function handleConfirmImport() {
+    if (!pendingFile) return
+    bulkImportMutation.mutate(pendingFile)
   }
 
   function downloadTemplate() {
@@ -511,6 +549,10 @@ export default function InventoryPage() {
       <div className="space-y-1.5">
         <Label>Cost Price (GH₵)</Label>
         <Input type="number" min="0" step="0.01" value={editCostPrice} onChange={(e) => setEditCostPrice(e.target.value)} placeholder="Optional unit cost" />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Quantity in Stock</Label>
+        <Input type="number" min="0" step="1" value={editAmountAvailable} onChange={(e) => setEditAmountAvailable(e.target.value)} placeholder="0" />
       </div>
       <div className="space-y-1.5">
         <Label>Category</Label>
@@ -658,43 +700,53 @@ export default function InventoryPage() {
 
       {/* Bulk import panel */}
       {showBulkImport && (
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm px-5 py-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-zinc-700">Bulk Import from CSV</p>
-            <button
-              type="button"
-              onClick={downloadTemplate}
-              className="flex items-center gap-1.5 text-xs font-medium text-green-700 hover:text-green-800"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download template
-            </button>
-          </div>
-          <p className="text-xs text-zinc-500">
-            Columns: <code className="text-zinc-700">product_name, product_price, amount_available</code> required,{" "}
-            <code className="text-zinc-700">sku, category</code> optional.
-          </p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            onChange={handleFileSelected}
-            disabled={bulkImportMutation.isPending}
-            className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-green-700 file:cursor-pointer"
-          />
-          {bulkImportMutation.isPending && (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Importing...
-            </div>
-          )}
-          {bulkResult && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-700 text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {bulkResult.created} of {bulkResult.total_rows} product{bulkResult.total_rows !== 1 ? "s" : ""} imported
-                {bulkResult.skipped > 0 && `, ${bulkResult.skipped} skipped`}
+        <div className="space-y-4">
+          {pendingFile && csvPreview ? (
+            <CSVImportPreview
+              fileName={pendingFile.name}
+              preview={csvPreview}
+              isPending={bulkImportMutation.isPending}
+              onConfirm={handleConfirmImport}
+              onCancel={handleCancelPreview}
+            />
+          ) : (
+            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm px-5 py-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-zinc-800">Bulk Import from CSV</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">Upload a CSV file to preview and confirm before importing</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={downloadTemplate}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-green-700 hover:text-green-800 cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download template
+                </button>
               </div>
+              <p className="text-xs text-zinc-500">
+                Supports exported files directly, or template columns:{" "}
+                <code className="text-zinc-700 font-mono">product_name, product_price, amount_available</code> required,{" "}
+                <code className="text-zinc-700 font-mono">sku, category, branch, cost_price, supplier_name</code> optional.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFileSelected}
+                disabled={bulkImportMutation.isPending}
+                className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-green-700 file:cursor-pointer"
+              />
+              {bulkResult && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-700 text-sm font-medium">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    {bulkResult.created} of {bulkResult.total_rows} product{bulkResult.total_rows !== 1 ? "s" : ""} imported
+                    {bulkResult.skipped > 0 && `, ${bulkResult.skipped} skipped`}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -941,7 +993,7 @@ export default function InventoryPage() {
                   ) : isEditing ? (
                     <div className="space-y-4">
                       <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
-                        Edit Product Details (Stock quantity is updated via Restock)
+                        Edit Product Details & Stock Quantity
                       </p>
                       {editForm}
                       <div className="flex justify-end gap-2 pt-2">

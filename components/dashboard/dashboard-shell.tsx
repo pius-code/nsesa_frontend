@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { WorkerProfileModal } from "@/components/shared/worker-profile-modal";
 import { signOut } from "next-auth/react";
+import { safeSignOut } from "@/lib/auth-client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/axios";
@@ -120,6 +121,15 @@ function getNavItems(session: Session["user"]): NavItem[] {
   if (perms.can_manage_branches) {
     items.push({ label: "Branches", href: "/dashboard/admin/branches", icon: Store });
   }
+  if (perms.can_add_categories) {
+    items.push({ label: "Categories", href: "/dashboard/admin/categories", icon: Tags });
+  }
+  if (perms.can_view_own_branch_report || perms.can_view_all_reports) {
+    items.push({ label: "Financial Reports", href: "/dashboard/admin/reports", icon: TrendingUp });
+  }
+  if (perms.can_add_others) {
+    items.push({ label: "Workers", href: "/dashboard/admin/workers", icon: Users });
+  }
 
   return items;
 }
@@ -180,8 +190,14 @@ function BranchSwitcher({
         className="group flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/25 hover:bg-black/40 text-white/90 hover:text-white transition-all text-[11px] font-medium border border-white/10 hover:border-white/25 cursor-pointer max-w-full"
         title="Click to switch operating branch"
       >
-        <Store className="h-3 w-3 text-green-300 shrink-0" />
-        <span className="truncate max-w-[120px] font-semibold">{activeBranch}</span>
+        {isPending ? (
+          <Loader2 className="h-3 w-3 text-green-300 animate-spin shrink-0" />
+        ) : (
+          <Store className="h-3 w-3 text-green-300 shrink-0" />
+        )}
+        <span className="truncate max-w-[120px] font-semibold">
+          {isPending ? "Switching..." : activeBranch}
+        </span>
         <ChevronDown
           className={cn("h-3 w-3 text-green-200/70 shrink-0 transition-transform duration-200", open && "rotate-180")}
         />
@@ -302,6 +318,8 @@ function SidebarContent({
   onOpenChangePassword,
   onOpenTutorials,
   onNavigate,
+  pendingNavHref,
+  onNavigateStart,
 }: {
   session: Session;
   navItems: NavItem[];
@@ -317,7 +335,17 @@ function SidebarContent({
   onOpenChangePassword?: () => void;
   onOpenTutorials?: () => void;
   onNavigate?: () => void;
+  pendingNavHref?: string | null;
+  onNavigateStart?: (href: string) => void;
 }) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    await safeSignOut("/login");
+  };
+
   return (
     <div className="flex h-full flex-col">
       <ShopIdentity
@@ -353,16 +381,24 @@ function SidebarContent({
               ? "nav-branches"
               : undefined;
 
+          const isNavPending = pendingNavHref === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
               data-tour={tourId}
-              onClick={onNavigate}
+              onClick={() => {
+                if (pathname !== item.href) {
+                  onNavigateStart?.(item.href);
+                }
+                onNavigate?.();
+              }}
               className={cn(
-                "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer",
                 isActive
                   ? "bg-green-50 text-green-800 font-semibold"
+                  : isNavPending
+                  ? "bg-green-50/60 text-green-800"
                   : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
               )}
             >
@@ -370,11 +406,13 @@ function SidebarContent({
                 className={cn("h-4 w-4 shrink-0", isActive ? "text-green-700" : "text-zinc-400")}
               />
               <span className="truncate">{item.label}</span>
-              {showBadge && (
+              {isNavPending ? (
+                <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-green-700 shrink-0" />
+              ) : showBadge ? (
                 <span className="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-bold leading-none text-white bg-red-500 rounded-full animate-pulse shadow-xs">
                   {pendingResetsCount}
                 </span>
-              )}
+              ) : null}
             </Link>
           );
         })}
@@ -428,11 +466,16 @@ function SidebarContent({
         </button>
 
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+          onClick={handleSignOut}
+          disabled={isLoggingOut}
+          className="flex w-full items-center gap-2.5 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <LogOut className="h-3.5 w-3.5" />
-          Sign out
+          {isLoggingOut ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
+          ) : (
+            <LogOut className="h-3.5 w-3.5" />
+          )}
+          <span>{isLoggingOut ? "Signing out..." : "Sign out"}</span>
         </button>
         <p className="px-2.5 pt-0.5 text-[9px] text-zinc-300">Powered by FJ Pay</p>
       </div>
@@ -681,8 +724,31 @@ export function DashboardShell({
     },
   });
 
+  const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingNavHref(null);
+  }, [pathname]);
+
+  // Safety fallback: if navigation stalls or does not trigger route change within 4s, clear pending state
+  useEffect(() => {
+    if (!pendingNavHref) return;
+    const timer = setTimeout(() => {
+      setPendingNavHref(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [pendingNavHref]);
+
+  const isGlobalLoading = switchBranchMutation.isPending || !!pendingNavHref;
+
   return (
-    <div className="flex h-screen bg-gradient-to-br from-zinc-50 to-zinc-100/60">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-gradient-to-br from-zinc-50 to-zinc-100/60 relative">
+      {/* Sleek top loading progress bar for page navigation and branch switching */}
+      {isGlobalLoading && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-emerald-100 overflow-hidden">
+          <div className="h-full w-full bg-gradient-to-r from-emerald-600 via-teal-400 to-green-500 animate-pulse" />
+        </div>
+      )}
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-zinc-200 bg-white shadow-sm">
         <SidebarContent
@@ -699,6 +765,8 @@ export function DashboardShell({
           onOpenProfile={() => setProfileModalOpen(true)}
           onOpenChangePassword={() => setPasswordModalOpen(true)}
           onOpenTutorials={() => setTutorialsOpen(true)}
+          pendingNavHref={pendingNavHref}
+          onNavigateStart={(href) => setPendingNavHref(href)}
         />
       </aside>
 
@@ -743,6 +811,8 @@ export function DashboardShell({
                     setTutorialsOpen(true);
                   }}
                   onNavigate={() => setMobileOpen(false)}
+                  pendingNavHref={pendingNavHref}
+                  onNavigateStart={(href) => setPendingNavHref(href)}
                 />
               </SheetContent>
             </Sheet>
@@ -806,8 +876,17 @@ export function DashboardShell({
                 disabled={switchBranchMutation.isPending}
                 className="bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs h-8 px-3.5 rounded-xl shrink-0 cursor-pointer transition-all shadow-xs"
               >
-                <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" />
-                Return to {mainBranchName}
+                {switchBranchMutation.isPending && switchBranchMutation.variables === null ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Returning...
+                  </>
+                ) : (
+                  <>
+                    <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" />
+                    Return to {mainBranchName}
+                  </>
+                )}
               </Button>
             </div>
           )}

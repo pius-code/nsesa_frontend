@@ -22,7 +22,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }),
           });
 
-          if (!res.ok) return null;
+          if (!res.ok) {
+            const errData = await res.json().catch(() => null);
+            const detail = errData?.detail || "Invalid email or password. Please try again.";
+            throw new Error(detail);
+          }
 
           const data = await res.json();
 
@@ -40,8 +44,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             worker_shop_image: data.worker.worker_shop_image,
             permissions: data.worker.permissions ?? {},
           };
-        } catch {
-          return null;
+        } catch (error: any) {
+          throw error;
         }
       },
     }),

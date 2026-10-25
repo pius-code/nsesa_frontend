@@ -24,7 +24,15 @@ export async function loginAction(formData: FormData) {
       throw error
     }
 
-    // Any other error during credentials sign-in is an authentication failure
+    const detail =
+      error?.cause?.err?.message ||
+      error?.cause?.message ||
+      (error?.code && error.code !== "credentials" ? error.code : null);
+
+    if (detail && !detail.includes("CredentialsSignin") && !detail.includes("CallbackRouteError")) {
+      return { error: detail };
+    }
+
     return { error: "Invalid email or password. Please try again." }
   }
 }

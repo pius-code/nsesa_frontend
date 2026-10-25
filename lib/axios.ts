@@ -51,7 +51,9 @@ api.interceptors.response.use(
       const isLoginPage = window.location.pathname.startsWith("/login");
       if (!isLoginPage && !isSigningOut) {
         isSigningOut = true;
-        signOut({ callbackUrl: "/login?expired=true" });
+        signOut({ redirect: false }).finally(() => {
+          window.location.href = "/login?expired=true";
+        });
       }
     }
     return Promise.reject(error);

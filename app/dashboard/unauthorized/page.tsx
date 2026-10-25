@@ -32,7 +32,7 @@ export default function UnauthorizedPage() {
           </Button>
           <Button
             variant="default"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => { signOut({ redirect: false }).finally(() => { window.location.href = "/login"; }); }}
             className="gap-2 bg-zinc-900 hover:bg-zinc-800"
           >
             <LogOut className="h-4 w-4" />

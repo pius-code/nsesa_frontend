@@ -327,10 +327,24 @@ export default function BranchesPage() {
                       variant="outline"
                       disabled={switchMutation.isPending}
                       onClick={() => switchMutation.mutate(branch.branch_name)}
-                      className="h-8 px-2.5 text-xs text-zinc-700 hover:text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50/80 transition-colors cursor-pointer"
+                      className={cn(
+                        "h-8 px-2.5 text-xs transition-all cursor-pointer font-medium",
+                        switchMutation.isPending && switchMutation.variables === branch.branch_name
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : "text-zinc-700 hover:text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50/80"
+                      )}
                     >
-                      <Store className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                      Operate Here
+                      {switchMutation.isPending && switchMutation.variables === branch.branch_name ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin text-emerald-600" />
+                          Switching...
+                        </>
+                      ) : (
+                        <>
+                          <Store className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                          Operate Here
+                        </>
+                      )}
                     </Button>
                   )}
                 </div>
