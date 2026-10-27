@@ -195,7 +195,7 @@ export default function ReportsPage() {
   const netProfit = report?.net_profit ?? grossProfit - expenses;
 
   return (
-    <div className="flex flex-col gap-5 sm:gap-6 max-w-7xl mx-auto w-full px-1 sm:px-0">
+    <div className="flex flex-col gap-5 sm:gap-6 max-w-7xl mx-auto w-full px-1 sm:px-0 pb-12 sm:pb-16">
       {/* Top Header & Period Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-zinc-200 shadow-xs">
         <div>

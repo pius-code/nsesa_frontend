@@ -695,7 +695,7 @@ export default function ShopsPage() {
   const totalPages = data?.total_pages ?? 1
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-12 sm:pb-16">
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-zinc-900">Platform Shops</h1>

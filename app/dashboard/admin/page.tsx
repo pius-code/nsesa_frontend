@@ -472,7 +472,7 @@ export default function AdminOverviewPage() {
   const lowStockItems = overview?.low_stock_items ?? [];
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-10">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-16 sm:pb-20">
       {/* Top Welcome & Actions Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

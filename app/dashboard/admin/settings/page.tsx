@@ -122,7 +122,7 @@ export default function SettingsPage() {
   const isNameChanged = profile && name.trim() !== profile.name
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6 max-w-4xl pb-12 sm:pb-16">
       <div>
         <h1 className="text-xl font-bold text-zinc-900">Company Settings & Profile</h1>
         <p className="text-sm text-zinc-500 mt-0.5">

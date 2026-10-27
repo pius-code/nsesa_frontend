@@ -79,9 +79,11 @@ h1, h2, h3 {
   color: #18181b !important;
 }
 
-/* Viewport Lock: Prevent window-level scroll leakage and black background exposure */
+/* Viewport Lock: Prevent window-level scroll leakage and header displacement */
 html, body {
   height: 100%;
+  width: 100%;
   overflow: hidden;
   background-color: #fafafa;
+  overscroll-behavior-y: none;
 }

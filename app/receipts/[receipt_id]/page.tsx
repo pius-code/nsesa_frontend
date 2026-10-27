@@ -126,7 +126,7 @@ export default function ReceiptPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-zinc-50 flex flex-col items-center justify-center p-4 overflow-hidden print:bg-white print:p-0 print:min-h-0 print:block"> {/* noqa */}
+    <div className="relative min-h-screen bg-zinc-50 flex flex-col items-center justify-start sm:justify-center p-4 py-8 pb-24 sm:pb-28 overflow-y-auto print:bg-white print:p-0 print:min-h-0 print:block"> {/* noqa */}
       {/* Soft ambient glow — same treatment as the login page for a consistent public-facing feel */} {/* noqa */}
       <div className="pointer-events-none absolute -top-40 -left-32 h-96 w-96 rounded-full bg-green-200/40 blur-3xl print:hidden" /> {/* noqa */}
       <div className="pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-green-100/60 blur-3xl print:hidden" /> {/* noqa */}

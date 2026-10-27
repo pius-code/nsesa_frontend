@@ -626,7 +626,7 @@ export function PendingOrders() {
   }, [orders, searchTerm, branchFilter]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-12">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-16 sm:pb-20">
       {/* Top Header & Context */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

@@ -685,8 +685,10 @@ export function DashboardShell({
     staleTime: 60000,
   });
 
+  // Only shop admins are required to establish the main branch during onboarding.
+  // Workers and super admins are never forced or blocked by branch creation.
   const isBranchSetupRequired =
-    role !== "super_admin" &&
+    role === "admin" &&
     !isBranchesLoading &&
     branches.length === 0;
 
@@ -724,11 +726,35 @@ export function DashboardShell({
     },
   });
 
+  const mainRef = useRef<HTMLElement>(null);
   const [pendingNavHref, setPendingNavHref] = useState<string | null>(null);
 
+  // Reset scroll and close mobile navigation when changing tabs/pages
   useEffect(() => {
     setPendingNavHref(null);
+    setMobileOpen(false);
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
   }, [pathname]);
+
+  // Mobile viewport lock safeguard: prevent mobile Safari/Chrome from displacing window scroll
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleScroll = () => {
+      if (window.scrollY !== 0 || document.documentElement.scrollTop !== 0) {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Safety fallback: if navigation stalls or does not trigger route change within 4s, clear pending state
   useEffect(() => {
@@ -770,9 +796,9 @@ export function DashboardShell({
         />
       </aside>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0 w-full h-full relative">
         {/* Mobile top bar */}
-        <header className="flex md:hidden items-center justify-between border-b border-zinc-200 bg-white px-4 py-3">
+        <header className="flex md:hidden items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 shrink-0 sticky top-0 z-30 w-full min-h-[56px]">
           <div className="flex items-center gap-3 min-w-0">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
@@ -844,7 +870,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-28 sm:pb-32 md:pb-36 overscroll-contain">
           {/* Switched Branch Notification Banner */}
           {isSwitchedBranch && (
             <div className="mb-5 bg-gradient-to-r from-emerald-900 via-teal-900 to-green-950 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md border border-emerald-700/50 animate-in fade-in slide-in-from-top-2 duration-200">

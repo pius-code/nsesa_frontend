@@ -591,7 +591,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-12 sm:pb-16">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-zinc-900">Inventory</h1>

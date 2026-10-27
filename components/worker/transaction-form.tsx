@@ -280,7 +280,7 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
   const canSubmit = cart.length > 0 && !mutation.isPending
 
   return (
-    <div className="mx-auto max-w-xl w-full">
+    <div className="mx-auto max-w-xl w-full pb-12 sm:pb-16">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-zinc-900">New Transaction</h1>
         <p className="text-sm text-zinc-500 mt-0.5">Fill in customer details and add products</p>

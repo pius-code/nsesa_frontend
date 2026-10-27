@@ -169,7 +169,7 @@ export default function WorkerBroadcastPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full">
+    <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full pb-12 sm:pb-16">
       {/* Header */}
       <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
