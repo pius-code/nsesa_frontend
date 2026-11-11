@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import {
   Loader2,
   Store,
+  Wrench,
   Users,
   ChevronLeft,
   ChevronRight,
@@ -680,6 +681,36 @@ export default function ShopsPage() {
     setPage(1)
   }
 
+  const { data: maintenanceData, refetch: refetchMaintenance } = useQuery({
+    queryKey: ["system_maintenance"],
+    queryFn: async () => {
+      const { data } = await api.get("/api/v1/admin/maintenance")
+      return data
+    },
+    staleTime: 5000,
+  })
+
+  const toggleMaintenanceMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { data } = await api.post("/api/v1/admin/maintenance", {
+        is_maintenance: enabled,
+        message: "Sorry, we are currently under maintenance mode. Our team is making system improvements. We will be back shortly.",
+      })
+      return data
+    },
+    onSuccess: (resData: any) => {
+      refetchMaintenance()
+      if (resData?.is_maintenance) {
+        toast.warning("System Maintenance Mode is now ACTIVE. Public and cashier access is locked.")
+      } else {
+        toast.success("Maintenance Mode DEACTIVATED. Normal operations restored.")
+      }
+    },
+    onError: (err: any) => {
+      toast.error(getErrorMessage(err) || "Failed to update maintenance mode")
+    },
+  })
+
   const { data, isLoading, isError } = useQuery<ShopsResponse>({
     queryKey: ["all_shops", page, activeTab],
     queryFn: async () => {
@@ -696,12 +727,66 @@ export default function ShopsPage() {
 
   return (
     <div className="flex flex-col gap-6 pb-12 sm:pb-16">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-zinc-900">Platform Shops</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">
-          All registered businesses, branch networks, and platform SMS metrics
-        </p>
+      {/* Header with Maintenance Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-900">Platform Shops</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            All registered businesses, branch networks, and platform SMS metrics
+          </p>
+        </div>
+
+        {/* Maintenance Mode Toggle Switch */}
+        <div className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl border transition-all ${
+          maintenanceData?.is_maintenance
+            ? "bg-amber-50 border-amber-200 text-amber-950 shadow-xs"
+            : "bg-white border-zinc-200 shadow-xs"
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              {maintenanceData?.is_maintenance && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              )}
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                maintenanceData?.is_maintenance ? "bg-amber-500" : "bg-emerald-500"
+              }`} />
+            </span>
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-bold leading-none">
+                {maintenanceData?.is_maintenance ? "MAINTENANCE ACTIVE" : "System Live"}
+              </span>
+              <span className="text-[10px] text-zinc-500">
+                {maintenanceData?.is_maintenance ? "Cashiers & public locked" : "Normal operations"}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={toggleMaintenanceMutation.isPending}
+            onClick={() => {
+              const current = !!maintenanceData?.is_maintenance
+              const confirmMsg = current
+                ? "Turn OFF maintenance mode and restore access for all users?"
+                : "Turn ON maintenance mode? This will immediately lock out non-superadmin users and show the maintenance screen!"
+              if (window.confirm(confirmMsg)) {
+                toggleMaintenanceMutation.mutate(!current)
+              }
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 ${
+              maintenanceData?.is_maintenance
+                ? "bg-amber-500 hover:bg-amber-600 text-white shadow-xs"
+                : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+            }`}
+          >
+            {toggleMaintenanceMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Wrench className="h-3.5 w-3.5" />
+            )}
+            {maintenanceData?.is_maintenance ? "Turn OFF" : "Turn ON"}
+          </button>
+        </div>
       </div>
 
       {/* Section View Tabs */}

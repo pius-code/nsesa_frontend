@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 import { getSession, signOut } from "next-auth/react";
 
 const api = axios.create({
@@ -40,14 +40,30 @@ api.interceptors.request.use(async (config) => {
 // Flag to prevent multiple simultaneous sign-out triggers from burst 401s
 let isSigningOut = false;
 
-// Auto sign-out on 401 Unauthorized (e.g. expired JWT) when on protected pages
+// Auto-handle 503 Maintenance and 401 Unauthorized
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const is401 = error.response?.status === 401;
     const isClientSide = typeof window !== "undefined";
+    const status = error.response?.status;
 
-    if (is401 && isClientSide) {
+    // 1. Maintenance Mode detection (HTTP 503) -> redirect to /maintenance
+    const is503Maintenance =
+      status === 503 &&
+      (error.response?.data?.maintenance_mode === true ||
+        (typeof error.response?.data?.detail === "string" &&
+          error.response?.data?.detail.toLowerCase().includes("maintenance")));
+
+    if (is503Maintenance && isClientSide) {
+      const isMaintenancePage = window.location.pathname.startsWith("/maintenance");
+      if (!isMaintenancePage) {
+        window.location.href = "/maintenance";
+      }
+      return Promise.reject(error);
+    }
+
+    // 2. Auto sign-out on 401 Unauthorized (e.g. expired JWT) when on protected pages
+    if (status === 401 && isClientSide) {
       const isLoginPage = window.location.pathname.startsWith("/login");
       if (!isLoginPage && !isSigningOut) {
         isSigningOut = true;

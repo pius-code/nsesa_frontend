@@ -20,7 +20,12 @@ export default auth((req) => {
   const isAuthenticated = !!req.auth
   const { pathname } = req.nextUrl
   const isPublicReceiptPage = /^\/receipts\/[^/]+$/.test(pathname)
+  const isMaintenancePage = pathname === "/maintenance"
   const role = req.auth?.user?.worker_role
+
+  if (isMaintenancePage) {
+    return NextResponse.next()
+  }
 
   if (!isAuthenticated && pathname !== "/login" && !isPublicReceiptPage) {
     return NextResponse.redirect(new URL("/login", req.url))
