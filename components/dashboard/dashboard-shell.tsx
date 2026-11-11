@@ -676,7 +676,12 @@ export function DashboardShell({
   });
 
   // Fetch shop branches
-  const { data: branches = [], isLoading: isBranchesLoading } = useQuery<BranchOption[]>({
+  const {
+    data: branches = [],
+    isLoading: isBranchesLoading,
+    isSuccess: isBranchesSuccess,
+    isError: isBranchesError,
+  } = useQuery<BranchOption[]>({
     queryKey: ["branches"],
     queryFn: async () => {
       const { data } = await api.get("/api/v1/branches");
@@ -687,9 +692,13 @@ export function DashboardShell({
 
   // Only shop admins are required to establish the main branch during onboarding.
   // Workers and super admins are never forced or blocked by branch creation.
+  // Guard against false positives: only trigger if the API call actually SUCCEEDED and returned 0 branches.
   const isBranchSetupRequired =
     role === "admin" &&
+    isBranchesSuccess &&
     !isBranchesLoading &&
+    !isBranchesError &&
+    Array.isArray(branches) &&
     branches.length === 0;
 
   const isPhoneMissing = profile !== undefined && (!profile?.worker_phone || profile.worker_phone.trim() === "");

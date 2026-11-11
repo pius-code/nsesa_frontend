@@ -32,6 +32,15 @@ export default auth((req) => {
   }
 
   if (isAuthenticated && pathname === "/login") {
+    // If redirected because session expired, allow viewing /login and clear stale cookies immediately
+    if (req.nextUrl.searchParams.get("expired") === "true") {
+      const res = NextResponse.next()
+      res.cookies.delete("authjs.session-token")
+      res.cookies.delete("__Secure-authjs.session-token")
+      res.cookies.delete("next-auth.session-token")
+      res.cookies.delete("__Secure-next-auth.session-token")
+      return res
+    }
     return NextResponse.redirect(new URL("/", req.url))
   }
 

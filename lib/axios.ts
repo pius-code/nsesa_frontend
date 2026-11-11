@@ -67,9 +67,19 @@ api.interceptors.response.use(
       const isLoginPage = window.location.pathname.startsWith("/login");
       if (!isLoginPage && !isSigningOut) {
         isSigningOut = true;
-        signOut({ redirect: false }).finally(() => {
-          window.location.href = "/login?expired=true";
-        });
+        try {
+          // Clear cookies client-side to immediately neutralize middleware auth check
+          document.cookie = "authjs.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+          document.cookie = "__Secure-authjs.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure;";
+          document.cookie = "next-auth.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+          document.cookie = "__Secure-next-auth.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure;";
+        } catch {}
+
+        signOut({ redirect: false })
+          .catch(() => {})
+          .finally(() => {
+            window.location.href = "/login?expired=true";
+          });
       }
     }
     return Promise.reject(error);

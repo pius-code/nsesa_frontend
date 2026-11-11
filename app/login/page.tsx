@@ -13,6 +13,12 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("expired=true")) {
       setError("Your session has expired. Please sign in again.");
+      try {
+        document.cookie = "authjs.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        document.cookie = "__Secure-authjs.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure;";
+        document.cookie = "next-auth.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        document.cookie = "__Secure-next-auth.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure;";
+      } catch {}
       window.history.replaceState({}, "", "/login");
     }
   }, []);
