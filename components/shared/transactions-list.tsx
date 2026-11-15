@@ -29,6 +29,7 @@ import {
   Calendar,
   Sparkles,
   TrendingUp,
+  Star,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,9 @@ export interface Transaction {
   customer_email: string | null;
   note: string | null;
   items: TransactionItem[];
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
   total_price: number;
   payment_mode: string | null;
   processed_by: string;
@@ -60,6 +64,11 @@ export interface Transaction {
   created_at: string;
   at_shop: string;
   branch_name?: string | null;
+  rating?: number | null;
+  review_comment?: string | null;
+  reviewed_at?: string | null;
+  shop_reply?: string | null;
+  shop_replied_at?: string | null;
 }
 
 export interface TransactionFilters {
@@ -73,7 +82,14 @@ export interface TransactionFilters {
 export function useTransactions(filters: TransactionFilters = {}) {
   const { startDate, endDate, processedBy, status, branchName } = filters;
   return useQuery<Transaction[]>({
-    queryKey: ["transactions", startDate, endDate, processedBy, status, branchName],
+    queryKey: [
+      "transactions",
+      startDate,
+      endDate,
+      processedBy,
+      status,
+      branchName,
+    ],
     queryFn: async () => {
       const { data } = await api.get("/api/v1/return_my_shop_transactions", {
         params: {
@@ -81,7 +97,8 @@ export function useTransactions(filters: TransactionFilters = {}) {
           end_date: endDate || undefined,
           processed_by: processedBy || undefined,
           status: status || undefined,
-          branch_name: branchName && branchName !== "all" ? branchName : undefined,
+          branch_name:
+            branchName && branchName !== "all" ? branchName : undefined,
         },
       });
       return data;
@@ -111,7 +128,9 @@ function useProcessedByOptions() {
   return useQuery<string[]>({
     queryKey: ["transactions-processed-by-options"],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/transactions/processed_by_options");
+      const { data } = await api.get(
+        "/api/v1/transactions/processed_by_options",
+      );
       return data;
     },
     staleTime: 5 * 60 * 1000,
@@ -129,7 +148,13 @@ interface AuditChange {
 
 interface AuditEntry {
   _id: string;
-  action: "deleted" | "refunded" | "edited" | "receipt_resent" | "payment_completed" | "cancelled";
+  action:
+    | "deleted"
+    | "refunded"
+    | "edited"
+    | "receipt_resent"
+    | "payment_completed"
+    | "cancelled";
   performed_by_name: string;
   reason: string;
   changes: Record<string, AuditChange> | null;
@@ -140,7 +165,9 @@ function useTransactionAudit(transactionId: string, enabled: boolean) {
   return useQuery<AuditEntry[]>({
     queryKey: ["transaction-audit", transactionId],
     queryFn: async () => {
-      const { data } = await api.get(`/api/v1/transactions/${transactionId}/audit`);
+      const { data } = await api.get(
+        `/api/v1/transactions/${transactionId}/audit`,
+      );
       return data;
     },
     enabled,
@@ -162,8 +189,10 @@ function formatChangeEntry(field: string, change: AuditChange) {
 }
 
 function actionBadgeVariant(action: AuditEntry["action"]) {
-  if (action === "deleted" || action === "cancelled") return "destructive" as const;
-  if (action === "refunded" || action === "receipt_resent") return "secondary" as const;
+  if (action === "deleted" || action === "cancelled")
+    return "destructive" as const;
+  if (action === "refunded" || action === "receipt_resent")
+    return "secondary" as const;
   if (action === "payment_completed") return "default" as const;
   return "default" as const;
 }
@@ -174,10 +203,16 @@ function actionLabel(action: AuditEntry["action"]) {
 
 function TransactionLogs({ transactionId }: { transactionId: string }) {
   const [open, setOpen] = useState(false);
-  const { data: entries = [], isLoading } = useTransactionAudit(transactionId, open);
+  const { data: entries = [], isLoading } = useTransactionAudit(
+    transactionId,
+    open,
+  );
 
   return (
-    <div className="pt-3 mt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="pt-3 mt-3 border-t border-zinc-100"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -185,7 +220,11 @@ function TransactionLogs({ transactionId }: { transactionId: string }) {
       >
         <History className="h-3.5 w-3.5" />
         Logs
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {open ? (
+          <ChevronUp className="h-3 w-3" />
+        ) : (
+          <ChevronDown className="h-3 w-3" />
+        )}
       </button>
 
       {open && (
@@ -196,18 +235,29 @@ function TransactionLogs({ transactionId }: { transactionId: string }) {
               Loading logs...
             </p>
           ) : entries.length === 0 ? (
-            <p className="text-xs text-zinc-400">No changes have been logged for this transaction.</p>
+            <p className="text-xs text-zinc-400">
+              No changes have been logged for this transaction.
+            </p>
           ) : (
             entries.map((entry) => (
-              <div key={entry._id} className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2">
+              <div
+                key={entry._id}
+                className="rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2"
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <Badge variant={actionBadgeVariant(entry.action)} className="capitalize text-[10px]">
+                  <Badge
+                    variant={actionBadgeVariant(entry.action)}
+                    className="capitalize text-[10px]"
+                  >
                     {actionLabel(entry.action)}
                   </Badge>
-                  <span className="text-xs text-zinc-400">{formatDate(entry.created_at)}</span>
+                  <span className="text-xs text-zinc-400">
+                    {formatDate(entry.created_at)}
+                  </span>
                 </div>
                 <p className="mt-1.5 text-xs text-zinc-700">
-                  <span className="font-medium">{entry.performed_by_name}</span>: {entry.reason}
+                  <span className="font-medium">{entry.performed_by_name}</span>
+                  : {entry.reason}
                 </p>
                 {entry.changes && (
                   <ul className="mt-1.5 space-y-0.5 text-xs text-zinc-500">
@@ -236,7 +286,12 @@ function formatDate(iso: string) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const variant = status === "success" ? "default" : status === "pending" ? "warning" : "secondary";
+  const variant =
+    status === "success"
+      ? "default"
+      : status === "pending"
+        ? "warning"
+        : "secondary";
   return (
     <Badge variant={variant} className="capitalize text-xs">
       {status}
@@ -246,7 +301,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function PaymentModeBadge({ mode }: { mode: string | null | undefined }) {
   if (!mode) {
-    return <span className="text-[11px] text-zinc-400 italic">Unspecified</span>;
+    return (
+      <span className="text-[11px] text-zinc-400 italic">Unspecified</span>
+    );
   }
   const cleanMode = mode.toLowerCase();
   if (cleanMode.includes("momo") || cleanMode.includes("mobile")) {
@@ -294,19 +351,33 @@ function ItemsTable({ items }: { items: TransactionItem[] }) {
       <table className="w-full text-xs">
         <thead className="bg-zinc-50">
           <tr>
-            <th className="px-3 py-2 text-left font-medium text-zinc-500">Product</th>
-            <th className="px-3 py-2 text-right font-medium text-zinc-500">Unit Price</th>
-            <th className="px-3 py-2 text-right font-medium text-zinc-500">Qty</th>
-            <th className="px-3 py-2 text-right font-medium text-zinc-500">Subtotal</th>
+            <th className="px-3 py-2 text-left font-medium text-zinc-500">
+              Product
+            </th>
+            <th className="px-3 py-2 text-right font-medium text-zinc-500">
+              Unit Price
+            </th>
+            <th className="px-3 py-2 text-right font-medium text-zinc-500">
+              Qty
+            </th>
+            <th className="px-3 py-2 text-right font-medium text-zinc-500">
+              Subtotal
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100 bg-white">
           {items.map((item) => (
             <tr key={item.product_id}>
               <td className="px-3 py-2 text-zinc-700">{item.product_name}</td>
-              <td className="px-3 py-2 text-right text-zinc-600">GH₵{item.unit_price.toFixed(2)}</td>
-              <td className="px-3 py-2 text-right text-zinc-600">{item.quantity}</td>
-              <td className="px-3 py-2 text-right font-medium text-zinc-800">GH₵{item.subtotal.toFixed(2)}</td>
+              <td className="px-3 py-2 text-right text-zinc-600">
+                GH₵{item.unit_price.toFixed(2)}
+              </td>
+              <td className="px-3 py-2 text-right text-zinc-600">
+                {item.quantity}
+              </td>
+              <td className="px-3 py-2 text-right font-medium text-zinc-800">
+                GH₵{item.subtotal.toFixed(2)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -324,6 +395,111 @@ function TransactionNote({ note }: { note: string | null }) {
   );
 }
 
+function TransactionFeedbackSection({
+  tx,
+  canManage,
+}: {
+  tx: Transaction;
+  canManage?: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState(tx.shop_reply || "");
+
+  const replyMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/api/v1/transactions/${tx._id}/reply`, {
+        reply: replyText.trim(),
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Reply saved successfully");
+      setReplyOpen(false);
+    },
+    onError: (err: unknown) =>
+      toast.error(errorMessage(err, "Failed to submit reply")),
+  });
+
+  if (!tx.rating) return null;
+
+  return (
+    <div
+      className="mt-3 rounded-xl bg-amber-50/50 border border-amber-200/80 p-3 space-y-2 text-xs"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 font-semibold text-zinc-800">
+          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+          <span>Customer Feedback: {tx.rating} / 5 Stars</span>
+        </div>
+        {tx.reviewed_at && (
+          <span className="text-[10px] text-zinc-400">
+            {new Date(tx.reviewed_at).toLocaleDateString()}
+          </span>
+        )}
+      </div>
+
+      {tx.review_comment && (
+        <p className="text-zinc-600 italic bg-white/80 p-2.5 rounded-lg border border-amber-100 text-xs">
+          &ldquo;{tx.review_comment}&rdquo;
+        </p>
+      )}
+
+      {tx.shop_reply && (
+        <div className="pl-2.5 border-l-2 border-emerald-500 py-1 bg-emerald-50/60 rounded-r px-2 text-emerald-800">
+          <span className="font-semibold text-[11px] block">Shop Reply:</span>
+          <p className="mt-0.5">{tx.shop_reply}</p>
+        </div>
+      )}
+
+      {canManage && (
+        <div>
+          {!replyOpen ? (
+            <button
+              type="button"
+              onClick={() => setReplyOpen(true)}
+              className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 underline cursor-pointer mt-1"
+            >
+              {tx.shop_reply ? "Edit Shop Reply" : "Reply to Customer Feedback"}
+            </button>
+          ) : (
+            <div className="space-y-2 mt-2 pt-2 border-t border-amber-200/60">
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write an official response to the customer..."
+                rows={2}
+                className="w-full text-xs p-2 rounded-lg border border-zinc-200 bg-white text-zinc-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setReplyOpen(false)}
+                  disabled={replyMutation.isPending}
+                  className="h-7 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => replyMutation.mutate()}
+                  disabled={replyMutation.isPending || !replyText.trim()}
+                  className="h-7 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                >
+                  {replyMutation.isPending ? "Posting..." : "Post Reply"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReceiptActions({ tx }: { tx: Transaction }) {
   const queryClient = useQueryClient();
   const [resendOpen, setResendOpen] = useState(false);
@@ -331,9 +507,12 @@ function ReceiptActions({ tx }: { tx: Transaction }) {
 
   const resendMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/api/v1/transactions/${tx._id}/resend-receipt`, {
-        customer_number: number.trim(),
-      });
+      const { data } = await api.post(
+        `/api/v1/transactions/${tx._id}/resend-receipt`,
+        {
+          customer_number: number.trim(),
+        },
+      );
       return data;
     },
     onSuccess: () => {
@@ -341,22 +520,35 @@ function ReceiptActions({ tx }: { tx: Transaction }) {
       toast.success("Receipt resent");
       setResendOpen(false);
     },
-    onError: (err: unknown) => toast.error(errorMessage(err, "Failed to resend receipt")),
+    onError: (err: unknown) =>
+      toast.error(errorMessage(err, "Failed to resend receipt")),
   });
 
   if (!tx.receipt_id) return null;
 
   return (
-    <div className="pt-3 mt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="pt-3 mt-3 border-t border-zinc-100"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={`/receipts/${tx.receipt_id}`} target="_blank" rel="noopener noreferrer">
+        <Link
+          href={`/receipts/${tx.receipt_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <Button type="button" size="sm" variant="outline">
             <ExternalLink className="h-3.5 w-3.5 mr-1" />
             View Receipt
           </Button>
         </Link>
         {!resendOpen && (
-          <Button type="button" size="sm" variant="outline" onClick={() => setResendOpen(true)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setResendOpen(true)}
+          >
             <Send className="h-3.5 w-3.5 mr-1" />
             Resend Receipt
           </Button>
@@ -389,7 +581,11 @@ function ReceiptActions({ tx }: { tx: Transaction }) {
               onClick={() => resendMutation.mutate()}
               disabled={resendMutation.isPending || number.trim().length < 6}
             >
-              {resendMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1" />}
+              {resendMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              ) : (
+                <Send className="h-3.5 w-3.5 mr-1" />
+              )}
               Send
             </Button>
           </div>
@@ -426,7 +622,7 @@ function ManagePanel({
   const [editEmail, setEditEmail] = useState(tx.customer_email ?? "");
   const [editNote, setEditNote] = useState(tx.note ?? "");
   const [editItems, setEditItems] = useState<TransactionItem[]>(() =>
-    tx.items.map((i) => ({ ...i }))
+    tx.items.map((i) => ({ ...i })),
   );
   const [selectedAddProductId, setSelectedAddProductId] = useState("");
 
@@ -466,7 +662,7 @@ function ManagePanel({
           quantity: qty,
           subtotal: parseFloat((qty * item.unit_price).toFixed(2)),
         };
-      })
+      }),
     );
   }
 
@@ -511,7 +707,9 @@ function ManagePanel({
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/api/v1/transactions/${tx._id}/delete`, { reason });
+      const { data } = await api.post(`/api/v1/transactions/${tx._id}/delete`, {
+        reason,
+      });
       return data;
     },
     onSuccess: () => {
@@ -521,12 +719,15 @@ function ManagePanel({
       toast.success("Transaction deleted and inventory restocked");
       reset();
     },
-    onError: (err: unknown) => toast.error(errorMessage(err, "Failed to delete transaction")),
+    onError: (err: unknown) =>
+      toast.error(errorMessage(err, "Failed to delete transaction")),
   });
 
   const refundMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/api/v1/transactions/${tx._id}/refund`, { reason });
+      const { data } = await api.post(`/api/v1/transactions/${tx._id}/refund`, {
+        reason,
+      });
       return data;
     },
     onSuccess: () => {
@@ -536,7 +737,8 @@ function ManagePanel({
       toast.success("Transaction refunded and inventory restocked");
       reset();
     },
-    onError: (err: unknown) => toast.error(errorMessage(err, "Failed to refund transaction")),
+    onError: (err: unknown) =>
+      toast.error(errorMessage(err, "Failed to refund transaction")),
   });
 
   const editMutation = useMutation({
@@ -569,10 +771,14 @@ function ManagePanel({
       toast.success("Receipt and inventory updated successfully!");
       reset();
     },
-    onError: (err: unknown) => toast.error(errorMessage(err, "Failed to update transaction")),
+    onError: (err: unknown) =>
+      toast.error(errorMessage(err, "Failed to update transaction")),
   });
 
-  const isPending = deleteMutation.isPending || refundMutation.isPending || editMutation.isPending;
+  const isPending =
+    deleteMutation.isPending ||
+    refundMutation.isPending ||
+    editMutation.isPending;
 
   if (mode === null) {
     return (
@@ -587,13 +793,23 @@ function ManagePanel({
           </Button>
         )}
         {canManage && tx.status === "success" && (
-          <Button type="button" size="sm" variant="outline" onClick={() => setMode("refund")}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setMode("refund")}
+          >
             <RotateCcw className="h-3.5 w-3.5 mr-1" />
             Refund
           </Button>
         )}
         {canManage && (
-          <Button type="button" size="sm" variant="destructive" onClick={() => setMode("delete")}>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            onClick={() => setMode("delete")}
+          >
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Delete
           </Button>
@@ -603,17 +819,39 @@ function ManagePanel({
   }
 
   return (
-    <div className="pt-3 mt-3 border-t border-zinc-100 space-y-3.5" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="pt-3 mt-3 border-t border-zinc-100 space-y-3.5"
+      onClick={(e) => e.stopPropagation()}
+    >
       {mode === "edit" && (
         <div className="space-y-3.5">
           {/* Customer info fields */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-zinc-700">Customer Details</Label>
+            <Label className="text-xs font-semibold text-zinc-700">
+              Customer Details
+            </Label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Customer name" />
-              <Input value={editNumber} onChange={(e) => setEditNumber(e.target.value)} placeholder="Phone" />
-              <Input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="Email" />
-              <Input value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Note (e.g. no pepper)" className="sm:col-span-3" />
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Customer name"
+              />
+              <Input
+                value={editNumber}
+                onChange={(e) => setEditNumber(e.target.value)}
+                placeholder="Phone"
+              />
+              <Input
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="Email"
+              />
+              <Input
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="Note (e.g. no pepper)"
+                className="sm:col-span-3"
+              />
             </div>
           </div>
 
@@ -668,7 +906,8 @@ function ManagePanel({
                       value={item.quantity}
                       onChange={(e) => {
                         const val = parseInt(e.target.value, 10);
-                        if (!isNaN(val) && val >= 1) updateItemQuantity(idx, val);
+                        if (!isNaN(val) && val >= 1)
+                          updateItemQuantity(idx, val);
                       }}
                       className="w-12 h-7 text-center text-sm font-semibold text-zinc-900 border border-zinc-200 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
@@ -703,7 +942,9 @@ function ManagePanel({
 
               {editItems.length === 0 && (
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                  All items removed. A receipt must have at least one product. If the customer returned all items, cancel and use <strong>Refund</strong> instead.
+                  All items removed. A receipt must have at least one product.
+                  If the customer returned all items, cancel and use{" "}
+                  <strong>Refund</strong> instead.
                 </div>
               )}
             </div>
@@ -720,7 +961,8 @@ function ManagePanel({
                   .filter((p) => p.is_available && p.amount_available > 0)
                   .map((p) => (
                     <option key={p._id} value={p._id}>
-                      {p.product_name} — GH₵{(p.product_price ?? 0).toFixed(2)} ({p.amount_available} in stock)
+                      {p.product_name} — GH₵{(p.product_price ?? 0).toFixed(2)}{" "}
+                      ({p.amount_available} in stock)
                     </option>
                   ))}
               </select>
@@ -743,18 +985,30 @@ function ManagePanel({
       {/* Audit Reason */}
       <div className="space-y-1">
         <Label className="text-xs font-semibold text-zinc-700">
-          Reason for {mode === "edit" ? "Edit" : mode === "refund" ? "Refund" : "Deletion"} <span className="text-red-500">*</span>
+          Reason for{" "}
+          {mode === "edit" ? "Edit" : mode === "refund" ? "Refund" : "Deletion"}{" "}
+          <span className="text-red-500">*</span>
         </Label>
         <Input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder={mode === "edit" ? "e.g. Swapped 1 item for another, corrected quantity" : "Why are you making this change?"}
+          placeholder={
+            mode === "edit"
+              ? "e.g. Swapped 1 item for another, corrected quantity"
+              : "Why are you making this change?"
+          }
           autoFocus
         />
       </div>
 
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" size="sm" variant="outline" onClick={reset} disabled={isPending}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={reset}
+          disabled={isPending}
+        >
           <X className="h-3.5 w-3.5 mr-1" />
           Cancel
         </Button>
@@ -805,12 +1059,22 @@ function TransactionRow({
           {formatDate(tx.created_at)}
         </td>
         <td className="px-4 py-3">
-          <p className="text-sm font-medium text-zinc-900">
-            {tx.customer_name}
-            {tx.customer_number && (
-              <span className="ml-1.5 text-xs font-normal text-zinc-400">• {tx.customer_number}</span>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-zinc-900 truncate">
+              {tx.customer_name}
+              {tx.customer_number && (
+                <span className="ml-1.5 text-xs font-normal text-zinc-400">
+                  • {tx.customer_number}
+                </span>
+              )}
+            </p>
+            {tx.rating && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                {tx.rating}
+              </span>
             )}
-          </p>
+          </div>
         </td>
         <td className="px-4 py-3">
           <PaymentModeBadge mode={tx.payment_mode} />
@@ -838,9 +1102,14 @@ function TransactionRow({
           <td colSpan={8} className="px-4 pb-4 pt-0 bg-zinc-50/50">
             <ItemsTable items={tx.items} />
             <TransactionNote note={tx.note} />
+            <TransactionFeedbackSection tx={tx} canManage={canManage} />
             <ReceiptActions tx={tx} />
-            {(canManage || canEdit) && <TransactionLogs transactionId={tx._id} />}
-            {(canManage || canEdit) && <ManagePanel tx={tx} canManage={canManage} canEdit={canEdit} />}
+            {(canManage || canEdit) && (
+              <TransactionLogs transactionId={tx._id} />
+            )}
+            {(canManage || canEdit) && (
+              <ManagePanel tx={tx} canManage={canManage} canEdit={canEdit} />
+            )}
           </td>
         </tr>
       )}
@@ -867,12 +1136,22 @@ function TransactionCard({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-zinc-900 truncate">
-              {tx.customer_name}
-              {tx.customer_number && (
-                <span className="ml-1.5 text-xs font-normal text-zinc-400">• {tx.customer_number}</span>
+            <div className="flex items-center gap-1.5">
+              <p className="font-medium text-zinc-900 truncate">
+                {tx.customer_name}
+                {tx.customer_number && (
+                  <span className="ml-1.5 text-xs font-normal text-zinc-400">
+                    • {tx.customer_number}
+                  </span>
+                )}
+              </p>
+              {tx.rating && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                  <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  {tx.rating}
+                </span>
               )}
-            </p>
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-zinc-400">
                 {formatDate(tx.created_at)}
@@ -915,9 +1194,12 @@ function TransactionCard({
         <div className="px-4 pb-4 border-t border-zinc-100 bg-zinc-50/50">
           <ItemsTable items={tx.items} />
           <TransactionNote note={tx.note} />
+          <TransactionFeedbackSection tx={tx} canManage={canManage} />
           <ReceiptActions tx={tx} />
           {(canManage || canEdit) && <TransactionLogs transactionId={tx._id} />}
-          {(canManage || canEdit) && <ManagePanel tx={tx} canManage={canManage} canEdit={canEdit} />}
+          {(canManage || canEdit) && (
+            <ManagePanel tx={tx} canManage={canManage} canEdit={canEdit} />
+          )}
         </div>
       )}
     </div>
@@ -931,10 +1213,16 @@ export function TransactionsList() {
   const { data: session } = useSession();
   const isWorker = session?.user?.worker_role === "worker";
   const shopName = session?.user?.worker_shop_name;
-  const perms = (session?.user?.permissions || {}) as unknown as Record<string, boolean>;
-  const isAdmin = session?.user?.worker_role === "admin" || session?.user?.worker_role === "super_admin";
+  const perms = (session?.user?.permissions || {}) as unknown as Record<
+    string,
+    boolean
+  >;
+  const isAdmin =
+    session?.user?.worker_role === "admin" ||
+    session?.user?.worker_role === "super_admin";
   const canManage = isAdmin || !!perms?.can_manage_orders;
-  const canEdit = isAdmin || !!perms?.can_manage_orders || !!perms?.can_edit_transaction;
+  const canEdit =
+    isAdmin || !!perms?.can_manage_orders || !!perms?.can_edit_transaction;
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
@@ -950,7 +1238,9 @@ export function TransactionsList() {
   const [branchName, setBranchName] = useState("all");
 
   const effectiveBranchFilter = isGlobal
-    ? (branchName !== "all" ? branchName : undefined)
+    ? branchName !== "all"
+      ? branchName
+      : undefined
     : workerBranch;
 
   const filters: TransactionFilters = {
@@ -966,15 +1256,20 @@ export function TransactionsList() {
     (endDate && endDate !== todayStr) ||
     processedBy ||
     status ||
-    (isGlobal && branchName !== "all")
+    (isGlobal && branchName !== "all"),
   );
 
-  const { data: rawTransactions = [], isLoading, isError } = useTransactions(filters);
+  const {
+    data: rawTransactions = [],
+    isLoading,
+    isError,
+  } = useTransactions(filters);
   const { data: peopleOptions = [] } = useProcessedByOptions();
-  
+
   const transactions = useMemo(() => {
     return [...rawTransactions].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
   }, [rawTransactions]);
 
@@ -1034,7 +1329,9 @@ export function TransactionsList() {
     };
   }, [transactions]);
 
-  function setDatePreset(preset: "today" | "yesterday" | "this_week" | "this_month" | "all") {
+  function setDatePreset(
+    preset: "today" | "yesterday" | "this_week" | "this_month" | "all",
+  ) {
     const now = new Date();
     if (preset === "today") {
       const d = now.toISOString().split("T")[0];
@@ -1083,8 +1380,8 @@ export function TransactionsList() {
             {isWorker
               ? "Your processed transactions and payment breakdowns"
               : shopName
-              ? `${shopName} transactions & performance`
-              : "All shop transactions"}
+                ? `${shopName} transactions & performance`
+                : "All shop transactions"}
           </p>
         </div>
 
@@ -1100,7 +1397,11 @@ export function TransactionsList() {
           </Button>
           <Button
             size="sm"
-            variant={!isTodayActive && startDate && startDate === endDate ? "default" : "outline"}
+            variant={
+              !isTodayActive && startDate && startDate === endDate
+                ? "default"
+                : "outline"
+            }
             onClick={() => setDatePreset("yesterday")}
             className="h-8 text-xs font-medium"
           >
@@ -1144,17 +1445,28 @@ export function TransactionsList() {
             </div>
             <div>
               <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
-                {isTodayActive ? "Today's Brief" : startDate && endDate ? `${startDate} to ${endDate}` : "Sales Summary"}
+                {isTodayActive
+                  ? "Today's Brief"
+                  : startDate && endDate
+                    ? `${startDate} to ${endDate}`
+                    : "Sales Summary"}
               </p>
               <h2 className="text-xl sm:text-2xl font-black text-white">
-                GH₵{summary.totalGross.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                GH₵
+                {summary.totalGross.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-3 text-xs text-zinc-300">
             <span className="bg-zinc-800 px-3 py-1.5 rounded-lg border border-zinc-700">
-              <strong className="text-white font-bold">{summary.successfulCount}</strong> completed sale{summary.successfulCount !== 1 ? "s" : ""}
+              <strong className="text-white font-bold">
+                {summary.successfulCount}
+              </strong>{" "}
+              completed sale{summary.successfulCount !== 1 ? "s" : ""}
             </span>
           </div>
         </div>
@@ -1271,7 +1583,11 @@ export function TransactionsList() {
           {!isWorker && (
             <div className="space-y-1">
               <Label className="text-xs">Processed By</Label>
-              <select value={processedBy} onChange={(e) => setProcessedBy(e.target.value)} className={SELECT_CLASS}>
+              <select
+                value={processedBy}
+                onChange={(e) => setProcessedBy(e.target.value)}
+                className={SELECT_CLASS}
+              >
                 <option value="">Everyone</option>
                 {peopleOptions.map((name) => (
                   <option key={name} value={name}>
@@ -1284,7 +1600,11 @@ export function TransactionsList() {
 
           <div className="space-y-1">
             <Label className="text-xs">Status</Label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT_CLASS}>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className={SELECT_CLASS}
+            >
               <option value="">All Statuses</option>
               <option value="success">Success</option>
               <option value="returned">Returned</option>
@@ -1319,10 +1639,14 @@ export function TransactionsList() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white py-20 text-center">
           <ReceiptText className="h-10 w-10 text-zinc-300 mb-3" />
           <p className="text-sm font-medium text-zinc-500">
-            {hasActiveFilters ? "No transactions match these filters" : "No transactions found"}
+            {hasActiveFilters
+              ? "No transactions match these filters"
+              : "No transactions found"}
           </p>
           <p className="text-xs text-zinc-400 mt-1">
-            {hasActiveFilters ? "Try widening your date range or clearing a filter" : "Completed transactions will appear here"}
+            {hasActiveFilters
+              ? "Try widening your date range or clearing a filter"
+              : "Completed transactions will appear here"}
           </p>
         </div>
       ) : (
@@ -1332,19 +1656,38 @@ export function TransactionsList() {
             <table className="w-full">
               <thead className="border-b border-zinc-200 bg-zinc-50/80">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Date & Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Customer</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Payment</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">Items</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Total</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">Staff</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Date & Time
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Customer
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Payment
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Items
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Total
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Staff
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 uppercase tracking-wide"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {transactions.map((tx) => (
-                  <TransactionRow key={tx._id} tx={tx} canManage={canManage} canEdit={canEdit} />
+                  <TransactionRow
+                    key={tx._id}
+                    tx={tx}
+                    canManage={canManage}
+                    canEdit={canEdit}
+                  />
                 ))}
               </tbody>
             </table>
@@ -1353,7 +1696,12 @@ export function TransactionsList() {
           {/* Mobile Cards */}
           <div className="flex md:hidden flex-col gap-3">
             {transactions.map((tx) => (
-              <TransactionCard key={tx._id} tx={tx} canManage={canManage} canEdit={canEdit} />
+              <TransactionCard
+                key={tx._id}
+                tx={tx}
+                canManage={canManage}
+                canEdit={canEdit}
+              />
             ))}
           </div>
         </>

@@ -1,131 +1,162 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect } from "react"
-import { useQuery, useMutation } from "@tanstack/react-query"
-import { Minus, Plus, Trash2, Loader2, ShoppingCart, Search, X, UserPlus, Check } from "lucide-react"
-import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
-import api from "@/lib/axios"
-import { getErrorMessage } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { DateStripPicker } from "@/components/ui/date-strip-picker"
+import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import {
+  Minus,
+  Plus,
+  Trash2,
+  Loader2,
+  ShoppingCart,
+  Search,
+  X,
+  UserPlus,
+  Check,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import api from "@/lib/axios";
+import { getErrorMessage } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DateStripPicker } from "@/components/ui/date-strip-picker";
 
 interface InventoryItem {
-  _id: string
-  product_name: string
-  product_price: number
-  amount_available: number
-  is_available: boolean
-  category_name: string | null
+  _id: string;
+  product_name: string;
+  product_price: number;
+  amount_available: number;
+  is_available: boolean;
+  category_name: string | null;
 }
 
 interface CartItem {
-  product_id: string
-  product_name: string
-  unit_price: number
-  quantity: number
-  subtotal: number
+  product_id: string;
+  product_name: string;
+  unit_price: number;
+  quantity: number;
+  subtotal: number;
 }
 
 interface Client {
-  id: string
-  client_name: string
-  client_phone: string | null
-  client_email: string | null
+  id: string;
+  client_name: string;
+  client_phone: string | null;
+  client_email: string | null;
 }
 
 function getLocalDatetimeString(date = new Date()) {
-  const pad = (n: number) => String(n).padStart(2, "0")
-  const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1)
-  const day = pad(date.getDate())
-  const hours = pad(date.getHours())
-  const minutes = pad(date.getMinutes())
-  return `${year}-${month}-${day}T${hours}:${minutes}`
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function useInventory() {
   return useQuery<InventoryItem[]>({
     queryKey: ["inventory"],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory")
-      return data
+      const { data } = await api.get("/api/v1/inventory/get_my_shop_inventory");
+      return data;
     },
     staleTime: 30 * 1000,
-  })
+  });
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
+  const [debounced, setDebounced] = useState(value);
   useEffect(() => {
-    const handle = setTimeout(() => setDebounced(value), delayMs)
-    return () => clearTimeout(handle)
-  }, [value, delayMs])
-  return debounced
+    const handle = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
 }
 
 function useClientSearch(query: string) {
-  const debouncedQuery = useDebouncedValue(query.trim(), 300)
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
   return useQuery<Client[]>({
     queryKey: ["clients-search", debouncedQuery],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/clients", { params: { q: debouncedQuery, limit: 8 } })
-      return data
+      const { data } = await api.get("/api/v1/clients", {
+        params: { q: debouncedQuery, limit: 8 },
+      });
+      return data;
     },
     enabled: debouncedQuery.length > 0,
     staleTime: 60 * 1000,
-  })
+  });
 }
 
-export function TransactionForm({ workerName, workerId }: { workerName: string; workerId?: string }) {
-  const queryClient = useQueryClient()
-  const { data: inventory = [], isLoading: inventoryLoading } = useInventory()
+export function TransactionForm({
+  workerName,
+  workerId,
+}: {
+  workerName: string;
+  workerId?: string;
+}) {
+  const queryClient = useQueryClient();
+  const { data: inventory = [], isLoading: inventoryLoading } = useInventory();
 
-  const [selectedProductId, setSelectedProductId] = useState("")
-  const [qty, setQty] = useState<string>("1")
-  const [cart, setCart] = useState<CartItem[]>([])
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [qty, setQty] = useState<string>("1");
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   // Ensure cart never retains products from an old branch after switching
   useEffect(() => {
     if (cart.length > 0 && inventory.length > 0) {
-      const validProductIds = new Set(inventory.map((p) => p._id))
-      setCart((prev) => prev.filter((item) => validProductIds.has(item.product_id)))
+      const validProductIds = new Set(inventory.map((p) => p._id));
+      setCart((prev) =>
+        prev.filter((item) => validProductIds.has(item.product_id)),
+      );
     }
-  }, [inventory])
+  }, [inventory]);
 
-  const [searchQuery, setSearchQuery] = useState("")
-  const [searchOpen, setSearchOpen] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
-  const [customerName, setCustomerName] = useState("")
-  const [customerNumber, setCustomerNumber] = useState("")
-  const [note, setNote] = useState("")
-  const [transactionDate, setTransactionDate] = useState(() => getLocalDatetimeString())
-  const [sendSms, setSendSms] = useState(true)
-  const [paymentMode, setPaymentMode] = useState<"cash" | "momo" | "card" | "pay_later">("cash")
-  const payLater = paymentMode === "pay_later"
+  const [customerName, setCustomerName] = useState("");
+  const [customerNumber, setCustomerNumber] = useState("");
+  const [note, setNote] = useState("");
+  const [transactionDate, setTransactionDate] = useState(() =>
+    getLocalDatetimeString(),
+  );
+  const [sendSms, setSendSms] = useState(true);
+  const [discount, setDiscount] = useState("");
+  const [discountType, setDiscountType] = useState<"cedis" | "percent">(
+    "cedis",
+  );
+  const [tax, setTax] = useState("");
+  const [taxType, setTaxType] = useState<"cedis" | "percent">("cedis");
+  const [paymentMode, setPaymentMode] = useState<
+    "cash" | "momo" | "card" | "pay_later"
+  >("cash");
+  const payLater = paymentMode === "pay_later";
 
-  const [clientId, setClientId] = useState<string | null>(null)
-  const [clientQuery, setClientQuery] = useState("")
-  const [clientSearchOpen, setClientSearchOpen] = useState(false)
-  const [showNewClientForm, setShowNewClientForm] = useState(false)
-  const [newClientName, setNewClientName] = useState("")
-  const [newClientPhone, setNewClientPhone] = useState("")
-  const { data: clientResults = [], isFetching: clientSearching } = useClientSearch(clientQuery)
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientQuery, setClientQuery] = useState("");
+  const [clientSearchOpen, setClientSearchOpen] = useState(false);
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
+  const { data: clientResults = [], isFetching: clientSearching } =
+    useClientSearch(clientQuery);
 
   function selectClient(client: Client) {
-    setClientId(client.id)
-    setClientQuery(client.client_name)
-    setCustomerName(client.client_name)
-    setCustomerNumber(client.client_phone ?? "")
-    setClientSearchOpen(false)
+    setClientId(client.id);
+    setClientQuery(client.client_name);
+    setCustomerName(client.client_name);
+    setCustomerNumber(client.client_phone ?? "");
+    setClientSearchOpen(false);
   }
 
   function clearClient() {
-    setClientId(null)
-    setClientQuery("")
+    setClientId(null);
+    setClientQuery("");
   }
 
   const createClientMutation = useMutation({
@@ -133,80 +164,89 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
       const { data } = await api.post("/api/v1/clients", {
         client_name: newClientName.trim(),
         client_phone: newClientPhone.trim() || null,
-      })
-      return data as Client
+      });
+      return data as Client;
     },
     onSuccess: (client) => {
-      queryClient.invalidateQueries({ queryKey: ["clients-search"] })
-      selectClient(client)
-      setShowNewClientForm(false)
-      setNewClientName("")
-      setNewClientPhone("")
-      toast.success("Client registered")
+      queryClient.invalidateQueries({ queryKey: ["clients-search"] });
+      selectClient(client);
+      setShowNewClientForm(false);
+      setNewClientName("");
+      setNewClientPhone("");
+      toast.success("Client registered");
     },
     onError: (err: unknown) => {
-      toast.error(getErrorMessage(err, "Failed to register client"))
+      toast.error(getErrorMessage(err, "Failed to register client"));
     },
-  })
+  });
 
-  const availableProducts = inventory.filter((p) => p.is_available)
+  const availableProducts = inventory.filter((p) => p.is_available);
 
   const filteredProducts = searchQuery.trim()
     ? availableProducts.filter((p) =>
-        p.product_name.toLowerCase().includes(searchQuery.toLowerCase())
+        p.product_name.toLowerCase().includes(searchQuery.toLowerCase()),
       )
-    : availableProducts
+    : availableProducts;
 
-  const selectedProduct = availableProducts.find((p) => p._id === selectedProductId)
+  const selectedProduct = availableProducts.find(
+    (p) => p._id === selectedProductId,
+  );
 
   const maxQty = selectedProduct
-    ? selectedProduct.amount_available - (cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0)
-    : Infinity
+    ? selectedProduct.amount_available -
+      (cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0)
+    : Infinity;
 
-  const parsedQty = Math.max(1, parseInt(String(qty), 10) || 1)
+  const parsedQty = Math.max(1, parseInt(String(qty), 10) || 1);
 
   function selectProduct(product: InventoryItem) {
-    setSelectedProductId(product._id)
-    setSearchQuery(product.product_name)
-    setSearchOpen(false)
-    setQty("1")
+    setSelectedProductId(product._id);
+    setSearchQuery(product.product_name);
+    setSearchOpen(false);
+    setQty("1");
   }
 
   function clearProduct() {
-    setSelectedProductId("")
-    setSearchQuery("")
-    setQty("1")
+    setSelectedProductId("");
+    setSearchQuery("");
+    setQty("1");
   }
 
   function incrementQty() {
     setQty((q) => {
-      const current = parseInt(String(q), 10) || 0
-      const next = selectedProduct ? Math.min(current + 1, maxQty) : current + 1
-      return String(next)
-    })
+      const current = parseInt(String(q), 10) || 0;
+      const next = selectedProduct
+        ? Math.min(current + 1, maxQty)
+        : current + 1;
+      return String(next);
+    });
   }
 
   function decrementQty() {
     setQty((q) => {
-      const current = parseInt(String(q), 10) || 1
-      return String(Math.max(1, current - 1))
-    })
+      const current = parseInt(String(q), 10) || 1;
+      return String(Math.max(1, current - 1));
+    });
   }
 
   function addItem() {
-    if (!selectedProduct) return
-    const actualQty = Math.max(1, Math.min(parseInt(String(qty), 10) || 1, maxQty))
-    const inCart = cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0
-    if (inCart + actualQty > selectedProduct.amount_available) return
+    if (!selectedProduct) return;
+    const actualQty = Math.max(
+      1,
+      Math.min(parseInt(String(qty), 10) || 1, maxQty),
+    );
+    const inCart =
+      cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0;
+    if (inCart + actualQty > selectedProduct.amount_available) return;
     setCart((prev) => {
-      const existing = prev.find((c) => c.product_id === selectedProduct._id)
+      const existing = prev.find((c) => c.product_id === selectedProduct._id);
       if (existing) {
-        const newQty = existing.quantity + actualQty
+        const newQty = existing.quantity + actualQty;
         return prev.map((c) =>
           c.product_id === selectedProduct._id
             ? { ...c, quantity: newQty, subtotal: newQty * c.unit_price }
-            : c
-        )
+            : c,
+        );
       }
       return [
         ...prev,
@@ -217,29 +257,51 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           quantity: actualQty,
           subtotal: actualQty * selectedProduct.product_price,
         },
-      ]
-    })
-    clearProduct()
+      ];
+    });
+    clearProduct();
   }
 
   function removeItem(productId: string) {
-    setCart((prev) => prev.filter((c) => c.product_id !== productId))
+    setCart((prev) => prev.filter((c) => c.product_id !== productId));
   }
 
   function updateCartQuantity(productId: string, newQty: number) {
-    const product = availableProducts.find((p) => p._id === productId)
-    const stockAvailable = product ? product.amount_available : Infinity
-    const clampedQty = newQty <= 0 ? 0 : Math.min(newQty, stockAvailable)
+    const product = availableProducts.find((p) => p._id === productId);
+    const stockAvailable = product ? product.amount_available : Infinity;
+    const clampedQty = newQty <= 0 ? 0 : Math.min(newQty, stockAvailable);
     setCart((prev) =>
       prev.map((c) =>
         c.product_id === productId
-          ? { ...c, quantity: clampedQty, subtotal: (clampedQty || 0) * c.unit_price }
-          : c
-      )
-    )
+          ? {
+              ...c,
+              quantity: clampedQty,
+              subtotal: (clampedQty || 0) * c.unit_price,
+            }
+          : c,
+      ),
+    );
   }
 
-  const total = cart.reduce((sum, c) => sum + c.subtotal, 0)
+  const subtotal = cart.reduce((sum, c) => sum + c.subtotal, 0);
+  const rawDiscount = Math.max(0, parseFloat(discount) || 0);
+  const discountVal =
+    Math.round(
+      (discountType === "percent"
+        ? (subtotal * rawDiscount) / 100
+        : rawDiscount) * 100,
+    ) / 100;
+
+  const rawTax = Math.max(0, parseFloat(tax) || 0);
+  const taxVal =
+    Math.round(
+      (taxType === "percent" ? (subtotal * rawTax) / 100 : rawTax) * 100,
+    ) / 100;
+
+  const total = Math.max(
+    0,
+    Math.round((subtotal - discountVal + taxVal) * 100) / 100,
+  );
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -249,53 +311,69 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
         client_id: clientId,
         items: cart,
         total_price: total,
+        discount: discountVal,
+        tax: taxVal,
         payment_mode: payLater ? null : paymentMode,
         processed_by: workerName,
         processed_by_id: workerId ?? null,
-        created_at: transactionDate ? new Date(transactionDate).toISOString() : null,
+        created_at: transactionDate
+          ? new Date(transactionDate).toISOString()
+          : null,
         send_sms: payLater ? false : sendSms,
         pay_later: payLater,
         note: note.trim() || null,
-      })
-      return data
+      });
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory"] })
-      queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      toast.success(payLater ? "Order saved as pending!" : "Transaction recorded successfully!")
-      setCart([])
-      setCustomerName("")
-      setCustomerNumber("")
-      setNote("")
-      setTransactionDate(getLocalDatetimeString())
-      clearClient()
-      clearProduct()
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success(
+        payLater
+          ? "Order saved as pending!"
+          : "Transaction recorded successfully!",
+      );
+      setCart([]);
+      setDiscount("");
+      setDiscountType("cedis");
+      setTax("");
+      setTaxType("cedis");
+      setCustomerName("");
+      setCustomerNumber("");
+      setNote("");
+      setTransactionDate(getLocalDatetimeString());
+      clearClient();
+      clearProduct();
     },
     onError: (err: unknown) => {
-      queryClient.invalidateQueries({ queryKey: ["inventory"] })
-      toast.error(getErrorMessage(err, "Failed to submit. Please try again."))
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      toast.error(getErrorMessage(err, "Failed to submit. Please try again."));
     },
-  })
+  });
 
-  const canSubmit = cart.length > 0 && !mutation.isPending
+  const canSubmit = cart.length > 0 && !mutation.isPending;
 
   return (
     <div className="mx-auto max-w-xl w-full pb-12 sm:pb-16">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-zinc-900">New Transaction</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Fill in customer details and add products</p>
+        <p className="text-sm text-zinc-500 mt-0.5">
+          Fill in customer details and add products
+        </p>
       </div>
 
       <form
         onSubmit={(e) => {
-          e.preventDefault()
-          if (canSubmit) mutation.mutate()
+          e.preventDefault();
+          if (canSubmit) mutation.mutate();
         }}
         className="bg-white rounded-2xl border border-zinc-200 shadow-sm divide-y divide-zinc-100"
       >
         {/* Customer details */}
         <div className="px-5 py-5 space-y-4">
-          <p className="text-sm font-semibold text-zinc-700">Customer & Sale Details</p>
+          <p className="text-sm font-semibold text-zinc-700">
+            Customer & Sale Details
+          </p>
 
           {/* Registered client search */}
           <div className="space-y-1.5">
@@ -303,8 +381,14 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             {clientId ? (
               <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
                 <Check className="h-4 w-4 text-green-600 shrink-0" />
-                <span className="text-sm font-medium text-green-800 flex-1 truncate">{clientQuery}</span>
-                <button type="button" onClick={clearClient} className="text-green-600 hover:text-green-800 shrink-0">
+                <span className="text-sm font-medium text-green-800 flex-1 truncate">
+                  {clientQuery}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearClient}
+                  className="text-green-600 hover:text-green-800 shrink-0"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -315,11 +399,13 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   placeholder="Search by name or phone..."
                   value={clientQuery}
                   onChange={(e) => {
-                    setClientQuery(e.target.value)
-                    setClientSearchOpen(true)
+                    setClientQuery(e.target.value);
+                    setClientSearchOpen(true);
                   }}
                   onFocus={() => setClientSearchOpen(true)}
-                  onBlur={() => setTimeout(() => setClientSearchOpen(false), 150)}
+                  onBlur={() =>
+                    setTimeout(() => setClientSearchOpen(false), 150)
+                  }
                   className="pl-9"
                 />
                 {clientSearchOpen && clientQuery.trim() && (
@@ -330,7 +416,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                         Searching...
                       </p>
                     ) : clientResults.length === 0 ? (
-                      <p className="px-3 py-2.5 text-sm text-zinc-400">No matching clients</p>
+                      <p className="px-3 py-2.5 text-sm text-zinc-400">
+                        No matching clients
+                      </p>
                     ) : (
                       clientResults.map((c) => (
                         <button
@@ -340,8 +428,14 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                           onClick={() => selectClient(c)}
                           className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-zinc-50 transition-colors text-left"
                         >
-                          <span className="font-medium text-zinc-800">{c.client_name}</span>
-                          {c.client_phone && <span className="text-zinc-500 text-xs shrink-0 ml-2">{c.client_phone}</span>}
+                          <span className="font-medium text-zinc-800">
+                            {c.client_name}
+                          </span>
+                          {c.client_phone && (
+                            <span className="text-zinc-500 text-xs shrink-0 ml-2">
+                              {c.client_phone}
+                            </span>
+                          )}
                         </button>
                       ))
                     )}
@@ -349,9 +443,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        setNewClientName(clientQuery)
-                        setShowNewClientForm(true)
-                        setClientSearchOpen(false)
+                        setNewClientName(clientQuery);
+                        setShowNewClientForm(true);
+                        setClientSearchOpen(false);
                       }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors text-left border-t border-zinc-100"
                     >
@@ -390,10 +484,17 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                     type="button"
                     size="sm"
                     onClick={() => createClientMutation.mutate()}
-                    disabled={createClientMutation.isPending || newClientName.trim() === ""}
+                    disabled={
+                      createClientMutation.isPending ||
+                      newClientName.trim() === ""
+                    }
                     className="flex-1"
                   >
-                    {createClientMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save Client"}
+                    {createClientMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      "Save Client"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -423,7 +524,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
 
           {/* Sleek Date Strip Picker */}
           <div className="space-y-1.5 pt-1">
-            <Label className="text-zinc-700 font-semibold">Transaction Date</Label>
+            <Label className="text-zinc-700 font-semibold">
+              Transaction Date
+            </Label>
             <DateStripPicker
               value={transactionDate}
               onChange={(newDate) => setTransactionDate(newDate)}
@@ -456,13 +559,18 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       : "bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50"
                   }`}
                 >
-                  {mode === "momo" ? "MoMo" : mode === "pay_later" ? "Pay Later" : mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  {mode === "momo"
+                    ? "MoMo"
+                    : mode === "pay_later"
+                      ? "Pay Later"
+                      : mode.charAt(0).toUpperCase() + mode.slice(1)}
                 </button>
               ))}
             </div>
             {payLater && (
               <p className="text-xs text-amber-600">
-                Saved as a pending order — no payment or receipt yet. Complete it later from Pending Orders.
+                Saved as a pending order — no payment or receipt yet. Complete
+                it later from Pending Orders.
               </p>
             )}
           </div>
@@ -475,7 +583,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                 onChange={(e) => setSendSms(e.target.checked)}
                 className="h-4 w-4 rounded border-zinc-300 accent-green-600 cursor-pointer"
               />
-              <span className="text-sm text-zinc-700">Send SMS confirmation to customer</span>
+              <span className="text-sm text-zinc-700">
+                Send SMS confirmation to customer
+              </span>
             </label>
           )}
         </div>
@@ -487,13 +597,15 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           <div ref={searchRef} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
             <Input
-              placeholder={inventoryLoading ? "Loading products..." : "Search products..."}
+              placeholder={
+                inventoryLoading ? "Loading products..." : "Search products..."
+              }
               value={searchQuery}
               disabled={inventoryLoading}
               onChange={(e) => {
-                setSearchQuery(e.target.value)
-                setSelectedProductId("")
-                setSearchOpen(true)
+                setSearchQuery(e.target.value);
+                setSelectedProductId("");
+                setSearchOpen(true);
               }}
               onFocus={() => setSearchOpen(true)}
               onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
@@ -512,7 +624,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             {searchOpen && searchQuery.trim() && (
               <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
                 {filteredProducts.length === 0 ? (
-                  <p className="px-3 py-2.5 text-sm text-zinc-400">No products found</p>
+                  <p className="px-3 py-2.5 text-sm text-zinc-400">
+                    No products found
+                  </p>
                 ) : (
                   filteredProducts.map((p) => (
                     <button
@@ -523,14 +637,22 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-zinc-50 transition-colors text-left"
                     >
                       <div>
-                        <span className="font-medium text-zinc-800">{p.product_name}</span>
+                        <span className="font-medium text-zinc-800">
+                          {p.product_name}
+                        </span>
                         {p.category_name && (
-                          <span className="ml-2 text-xs text-zinc-400">{p.category_name}</span>
+                          <span className="ml-2 text-xs text-zinc-400">
+                            {p.category_name}
+                          </span>
                         )}
                       </div>
                       <div className="text-right">
-                        <span className="font-semibold text-green-600">GH₵{p.product_price.toFixed(2)}</span>
-                        <span className="block text-[11px] text-zinc-400">{p.amount_available} in stock</span>
+                        <span className="font-semibold text-green-600">
+                          GH₵{p.product_price.toFixed(2)}
+                        </span>
+                        <span className="block text-[11px] text-zinc-400">
+                          {p.amount_available} in stock
+                        </span>
                       </div>
                     </button>
                   ))
@@ -540,23 +662,29 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           </div>
 
           {/* Stock hint */}
-          {selectedProduct && (() => {
-            const inCart = cart.find((c) => c.product_id === selectedProduct._id)?.quantity ?? 0
-            const remaining = selectedProduct.amount_available - inCart
-            const overLimit = parsedQty > remaining
-            return (
-              <p className={`text-xs ${overLimit ? "text-red-500 font-medium" : "text-zinc-500"}`}>
-                {overLimit
-                  ? `Only ${remaining} available (${inCart} already in cart)`
-                  : `${selectedProduct.amount_available} in stock • subtotal: `}
-                {!overLimit && (
-                  <span className="font-semibold text-green-600">
-                    GH₵{(selectedProduct.product_price * parsedQty).toFixed(2)}
-                  </span>
-                )}
-              </p>
-            )
-          })()}
+          {selectedProduct &&
+            (() => {
+              const inCart =
+                cart.find((c) => c.product_id === selectedProduct._id)
+                  ?.quantity ?? 0;
+              const remaining = selectedProduct.amount_available - inCart;
+              const overLimit = parsedQty > remaining;
+              return (
+                <p
+                  className={`text-xs ${overLimit ? "text-red-500 font-medium" : "text-zinc-500"}`}
+                >
+                  {overLimit
+                    ? `Only ${remaining} available (${inCart} already in cart)`
+                    : `${selectedProduct.amount_available} in stock • subtotal: `}
+                  {!overLimit && (
+                    <span className="font-semibold text-green-600">
+                      GH₵
+                      {(selectedProduct.product_price * parsedQty).toFixed(2)}
+                    </span>
+                  )}
+                </p>
+              );
+            })()}
 
           {/* Quantity stepper with raw numeric input + Add to cart */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -575,15 +703,15 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                 pattern="[0-9]*"
                 value={qty}
                 onChange={(e) => {
-                  const cleaned = e.target.value.replace(/[^0-9]/g, "")
-                  setQty(cleaned)
+                  const cleaned = e.target.value.replace(/[^0-9]/g, "");
+                  setQty(cleaned);
                 }}
                 onBlur={() => {
-                  const val = parseInt(qty, 10)
+                  const val = parseInt(qty, 10);
                   if (!qty || isNaN(val) || val < 1) {
-                    setQty("1")
+                    setQty("1");
                   } else if (selectedProduct && val > maxQty) {
-                    setQty(String(maxQty))
+                    setQty(String(maxQty));
                   }
                 }}
                 onFocus={(e) => e.target.select()}
@@ -607,7 +735,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             >
               <ShoppingCart className="h-4 w-4" />
               <span className="text-xs sm:text-sm font-semibold">
-                To cart {selectedProduct && `• GH₵${(selectedProduct.product_price * parsedQty).toFixed(2)}`}
+                To cart{" "}
+                {selectedProduct &&
+                  `• GH₵${(selectedProduct.product_price * parsedQty).toFixed(2)}`}
               </span>
             </Button>
           </div>
@@ -621,7 +751,9 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                 <ShoppingCart className="h-4 w-4" />
                 Order Items
               </p>
-              <span className="text-xs text-zinc-400">{cart.length} line(s)</span>
+              <span className="text-xs text-zinc-400">
+                {cart.length} line(s)
+              </span>
             </div>
 
             <div className="space-y-2">
@@ -641,7 +773,12 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                   <div className="flex items-center rounded-md border border-zinc-200 bg-white overflow-hidden shrink-0">
                     <button
                       type="button"
-                      onClick={() => updateCartQuantity(item.product_id, Math.max(1, (item.quantity || 1) - 1))}
+                      onClick={() =>
+                        updateCartQuantity(
+                          item.product_id,
+                          Math.max(1, (item.quantity || 1) - 1),
+                        )
+                      }
                       disabled={item.quantity <= 1}
                       className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
                     >
@@ -653,13 +790,16 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                       pattern="[0-9]*"
                       value={item.quantity === 0 ? "" : item.quantity}
                       onChange={(e) => {
-                        const cleaned = e.target.value.replace(/[^0-9]/g, "")
-                        const val = parseInt(cleaned, 10)
-                        updateCartQuantity(item.product_id, isNaN(val) ? 0 : val)
+                        const cleaned = e.target.value.replace(/[^0-9]/g, "");
+                        const val = parseInt(cleaned, 10);
+                        updateCartQuantity(
+                          item.product_id,
+                          isNaN(val) ? 0 : val,
+                        );
                       }}
                       onBlur={() => {
                         if (!item.quantity || item.quantity < 1) {
-                          updateCartQuantity(item.product_id, 1)
+                          updateCartQuantity(item.product_id, 1);
                         }
                       }}
                       onFocus={(e) => e.target.select()}
@@ -667,7 +807,12 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
                     />
                     <button
                       type="button"
-                      onClick={() => updateCartQuantity(item.product_id, (item.quantity || 0) + 1)}
+                      onClick={() =>
+                        updateCartQuantity(
+                          item.product_id,
+                          (item.quantity || 0) + 1,
+                        )
+                      }
                       className="px-2 py-1 text-zinc-600 hover:bg-zinc-100 cursor-pointer"
                     >
                       <Plus className="h-3 w-3" />
@@ -687,11 +832,156 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
               ))}
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-sm font-semibold text-zinc-700">Total</span>
-              <span className="text-xl font-bold text-green-600">
-                GH₵{total.toFixed(2)}
-              </span>
+            {/* Discount & Tax Adjustment Inputs */}
+            <div className="pt-3 pb-1 border-t border-zinc-100">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Discount */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="discount"
+                      className="text-xs font-medium text-zinc-600"
+                    >
+                      Discount
+                    </Label>
+                    <div className="inline-flex rounded-md bg-zinc-100 p-0.5 border border-zinc-200">
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType("cedis")}
+                        className={`px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded transition-all cursor-pointer ${
+                          discountType === "cedis"
+                            ? "bg-white text-zinc-900 shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900"
+                        }`}
+                      >
+                        GH₵
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType("percent")}
+                        className={`px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded transition-all cursor-pointer ${
+                          discountType === "percent"
+                            ? "bg-white text-zinc-900 shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900"
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    {discountType === "cedis" ? (
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 select-none">
+                        GH₵
+                      </span>
+                    ) : (
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 select-none">
+                        %
+                      </span>
+                    )}
+                    <Input
+                      id="discount"
+                      type="number"
+                      step={discountType === "percent" ? "1" : "0.01"}
+                      min="0"
+                      max={discountType === "percent" ? "100" : undefined}
+                      placeholder={discountType === "percent" ? "0" : "0.00"}
+                      value={discount}
+                      onChange={(e) => setDiscount(e.target.value)}
+                      className={`${discountType === "cedis" ? "pl-11" : "pr-8"} h-9 text-xs sm:text-sm font-medium`}
+                    />
+                  </div>
+                </div>
+
+                {/* Tax / VAT */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="tax"
+                      className="text-xs font-medium text-zinc-600"
+                    >
+                      Tax / VAT
+                    </Label>
+                    <div className="inline-flex rounded-md bg-zinc-100 p-0.5 border border-zinc-200">
+                      <button
+                        type="button"
+                        onClick={() => setTaxType("cedis")}
+                        className={`px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded transition-all cursor-pointer ${
+                          taxType === "cedis"
+                            ? "bg-white text-zinc-900 shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900"
+                        }`}
+                      >
+                        GH₵
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaxType("percent")}
+                        className={`px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded transition-all cursor-pointer ${
+                          taxType === "percent"
+                            ? "bg-white text-zinc-900 shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900"
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    {taxType === "cedis" ? (
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 select-none">
+                        GH₵
+                      </span>
+                    ) : (
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 select-none">
+                        %
+                      </span>
+                    )}
+                    <Input
+                      id="tax"
+                      type="number"
+                      step={taxType === "percent" ? "1" : "0.01"}
+                      min="0"
+                      placeholder={taxType === "percent" ? "0" : "0.00"}
+                      value={tax}
+                      onChange={(e) => setTax(e.target.value)}
+                      className={`${taxType === "cedis" ? "pl-11" : "pr-8"} h-9 text-xs sm:text-sm font-medium`}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Price Breakdown */}
+            <div className="pt-2 border-t border-zinc-100 space-y-1.5 text-xs text-zinc-500">
+              <div className="flex items-center justify-between">
+                <span>Items Subtotal</span>
+                <span className="font-medium text-zinc-700">
+                  GH₵{subtotal.toFixed(2)}
+                </span>
+              </div>
+              {discountVal > 0 && (
+                <div className="flex items-center justify-between text-rose-600 font-medium">
+                  <span>
+                    Discount {discountType === "percent" && `(${rawDiscount}%)`}
+                  </span>
+                  <span>-GH₵{discountVal.toFixed(2)}</span>
+                </div>
+              )}
+              {taxVal > 0 && (
+                <div className="flex items-center justify-between text-blue-600 font-medium">
+                  <span>
+                    Tax / VAT {taxType === "percent" && `(${rawTax}%)`}
+                  </span>
+                  <span>+GH₵{taxVal.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1 border-t border-zinc-100 text-sm font-semibold text-zinc-800">
+                <span>Final Total</span>
+                <span className="text-xl font-bold text-green-600">
+                  GH₵{total.toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -701,7 +991,11 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
           <Button
             type="submit"
             size="lg"
-            className={payLater ? "w-full bg-amber-500 hover:bg-amber-600 cursor-pointer" : "w-full cursor-pointer"}
+            className={
+              payLater
+                ? "w-full bg-amber-500 hover:bg-amber-600 cursor-pointer"
+                : "w-full cursor-pointer"
+            }
             disabled={!canSubmit}
           >
             {mutation.isPending ? (
@@ -714,10 +1008,12 @@ export function TransactionForm({ workerName, workerId }: { workerName: string; 
             )}
           </Button>
           {cart.length === 0 && (
-            <p className="text-xs text-center text-zinc-400 mt-2">Add at least one product to continue</p>
+            <p className="text-xs text-center text-zinc-400 mt-2">
+              Add at least one product to continue
+            </p>
           )}
         </div>
       </form>
     </div>
-  )
+  );
 }

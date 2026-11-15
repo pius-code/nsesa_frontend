@@ -1,7 +1,7 @@
-﻿"use client"
+﻿"use client";
 
-import { useState, useMemo } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Wallet,
   Plus,
@@ -18,25 +18,26 @@ import {
   AlertCircle,
   X,
   ShieldAlert,
-} from "lucide-react"
-import { toast } from "sonner"
-import api from "@/lib/axios"
-import { getErrorMessage } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+} from "lucide-react";
+import { toast } from "sonner";
+import api from "@/lib/axios";
+import { getErrorMessage } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 interface Expense {
-  id: string
-  title: string
-  amount: number
-  category: string
-  note: string | null
-  date: string
-  shop_name: string
-  recorded_by: string
-  created_at: string
+  id: string;
+  title: string;
+  amount: number;
+  category: string;
+  note: string | null;
+  date: string;
+  shop_name: string;
+  branch_name?: string | null;
+  recorded_by: string;
+  created_at: string;
 }
 
 const CATEGORIES = [
@@ -47,7 +48,7 @@ const CATEGORIES = [
   "Maintenance",
   "Supplies",
   "Other",
-]
+];
 
 const CATEGORY_COLORS: Record<string, string> = {
   Utilities: "bg-amber-50 text-amber-700 border-amber-200",
@@ -57,130 +58,172 @@ const CATEGORY_COLORS: Record<string, string> = {
   Maintenance: "bg-rose-50 text-rose-700 border-rose-200",
   Supplies: "bg-purple-50 text-purple-700 border-purple-200",
   Other: "bg-zinc-50 text-zinc-700 border-zinc-200",
-}
+};
 
 export function ExpensesList() {
-  const queryClient = useQueryClient()
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const queryClient = useQueryClient();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Form State - Add
-  const [title, setTitle] = useState("")
-  const [amount, setAmount] = useState("")
-  const [category, setCategory] = useState("Utilities")
-  const [note, setNote] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("Utilities");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [branchName, setBranchName] = useState("");
 
   // Form State - Edit
-  const [editTitle, setEditTitle] = useState("")
-  const [editAmount, setEditAmount] = useState("")
-  const [editCategory, setEditCategory] = useState("Utilities")
-  const [editNote, setEditNote] = useState("")
-  const [editDate, setEditDate] = useState("")
+  const [editTitle, setEditTitle] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editCategory, setEditCategory] = useState("Utilities");
+  const [editNote, setEditNote] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editBranchName, setEditBranchName] = useState("");
 
   // Filter State
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<string>("all")
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Fetch expenses
-  const { data: expenses = [], isLoading, isError } = useQuery<Expense[]>({
-    queryKey: ["expenses"],
+  // Fetch branches
+  const { data: branches = [] } = useQuery<
+    { id: string; branch_name: string }[]
+  >({
+    queryKey: ["branches"],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/expenses", { params: { limit: 200 } })
-      return data
+      try {
+        const { data } = await api.get("/api/v1/branches");
+        return data;
+      } catch {
+        return [];
+      }
     },
     staleTime: 60 * 1000,
-  })
+  });
+
+  // Fetch expenses
+  const {
+    data: expenses = [],
+    isLoading,
+    isError,
+  } = useQuery<Expense[]>({
+    queryKey: ["expenses", selectedBranch],
+    queryFn: async () => {
+      const params: Record<string, any> = { limit: 200 };
+      if (selectedBranch && selectedBranch !== "all") {
+        params.branch_name = selectedBranch;
+      }
+      const { data } = await api.get("/api/v1/expenses", { params });
+      return data;
+    },
+    staleTime: 60 * 1000,
+  });
 
   // Add Expense Mutation
   const addMutation = useMutation({
     mutationFn: async () => {
-      const parsedAmount = parseFloat(amount)
+      const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new Error("Please enter a valid positive amount")
+        throw new Error("Please enter a valid positive amount");
       }
 
-      const payload = {
+      const payload: Record<string, any> = {
         title: title.trim(),
         amount: parsedAmount,
         category: category.trim(),
         note: note.trim() || null,
         date: date ? new Date(date).toISOString() : null,
+      };
+      if (branchName.trim()) {
+        payload.branch_name = branchName.trim();
       }
-      const { data } = await api.post("/api/v1/expenses", payload)
-      return data
+      const { data } = await api.post("/api/v1/expenses", payload);
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] })
-      queryClient.invalidateQueries({ queryKey: ["reports"] })
-      toast.success("Expense recorded successfully")
-      setTitle("")
-      setAmount("")
-      setCategory("Utilities")
-      setNote("")
-      setDate(new Date().toISOString().split("T")[0])
-      setShowAddForm(false)
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      toast.success("Expense recorded successfully");
+      setTitle("");
+      setAmount("");
+      setCategory("Utilities");
+      setNote("");
+      setBranchName("");
+      setDate(new Date().toISOString().split("T")[0]);
+      setShowAddForm(false);
     },
     onError: (err: any) => {
-      toast.error(getErrorMessage(err, "Failed to save expense"))
+      toast.error(getErrorMessage(err, "Failed to save expense"));
     },
-  })
+  });
 
   // Edit Expense Mutation
   const editMutation = useMutation({
     mutationFn: async () => {
-      if (!editingExpense) return
-      const parsedAmount = parseFloat(editAmount)
+      if (!editingExpense) return;
+      const parsedAmount = parseFloat(editAmount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new Error("Please enter a valid positive amount")
+        throw new Error("Please enter a valid positive amount");
       }
 
-      const payload = {
+      const payload: Record<string, any> = {
         title: editTitle.trim(),
         amount: parsedAmount,
         category: editCategory.trim(),
         note: editNote.trim() || null,
         date: editDate ? new Date(editDate).toISOString() : null,
+      };
+      if (editBranchName.trim()) {
+        payload.branch_name = editBranchName.trim();
       }
-      const { data } = await api.patch(`/api/v1/expenses/${editingExpense.id}`, payload)
-      return data
+      const { data } = await api.patch(
+        `/api/v1/expenses/${editingExpense.id}`,
+        payload,
+      );
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] })
-      queryClient.invalidateQueries({ queryKey: ["reports"] })
-      toast.success("Expense updated successfully")
-      setEditingExpense(null)
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      toast.success("Expense updated successfully");
+      setEditingExpense(null);
     },
     onError: (err: any) => {
-      toast.error(getErrorMessage(err, "Failed to update expense"))
+      toast.error(getErrorMessage(err, "Failed to update expense"));
     },
-  })
+  });
 
   // Delete Expense Mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/v1/expenses/${id}`)
+      await api.delete(`/api/v1/expenses/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] })
-      queryClient.invalidateQueries({ queryKey: ["reports"] })
-      toast.success("Expense deleted")
-      setDeletingId(null)
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      toast.success("Expense deleted");
+      setDeletingId(null);
     },
     onError: (err: any) => {
-      toast.error(getErrorMessage(err, "Failed to delete expense"))
-      setDeletingId(null)
+      toast.error(getErrorMessage(err, "Failed to delete expense"));
+      setDeletingId(null);
     },
-  })
+  });
 
   function startEdit(exp: Expense) {
-    setEditingExpense(exp)
-    setEditTitle(exp.title)
-    setEditAmount(String(exp.amount))
-    setEditCategory(exp.category || "Utilities")
-    setEditNote(exp.note || "")
-    setEditDate(exp.date ? new Date(exp.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0])
+    setEditingExpense(exp);
+    setEditTitle(exp.title);
+    setEditAmount(String(exp.amount));
+    setEditCategory(exp.category || "Utilities");
+    setEditNote(exp.note || "");
+    setEditBranchName(exp.branch_name || "");
+    setEditDate(
+      exp.date
+        ? new Date(exp.date).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+    );
   }
 
   // Filtered list
@@ -188,15 +231,16 @@ export function ExpensesList() {
     return expenses.filter((e) => {
       const matchesSearch =
         e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (e.note && e.note.toLowerCase().includes(searchQuery.toLowerCase()))
-      const matchesCat = selectedCategory === "all" || e.category === selectedCategory
-      return matchesSearch && matchesCat
-    })
-  }, [expenses, searchQuery, selectedCategory])
+        (e.note && e.note.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesCat =
+        selectedCategory === "all" || e.category === selectedCategory;
+      return matchesSearch && matchesCat;
+    });
+  }, [expenses, searchQuery, selectedCategory]);
 
   const totalFilteredAmount = useMemo(() => {
-    return filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
-  }, [filteredExpenses])
+    return filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  }, [filteredExpenses]);
 
   return (
     <div className="space-y-6 pb-12 sm:pb-16">
@@ -213,8 +257,8 @@ export function ExpensesList() {
 
         <Button
           onClick={() => {
-            setShowAddForm((prev) => !prev)
-            if (editingExpense) setEditingExpense(null)
+            setShowAddForm((prev) => !prev);
+            if (editingExpense) setEditingExpense(null);
           }}
           className="bg-green-700 hover:bg-green-800 text-white font-medium"
         >
@@ -235,9 +279,15 @@ export function ExpensesList() {
             </div>
           </div>
           <p className="text-2xl font-bold text-zinc-900 mt-2">
-            GH₵ {totalFilteredAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            GH₵{" "}
+            {totalFilteredAmount.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </p>
-          <p className="text-xs text-zinc-400 mt-1">Across {filteredExpenses.length} entries</p>
+          <p className="text-xs text-zinc-400 mt-1">
+            Across {filteredExpenses.length} entries
+          </p>
         </div>
       </div>
 
@@ -245,7 +295,9 @@ export function ExpensesList() {
       {showAddForm && (
         <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm">
           <div className="flex items-center justify-between pb-4 border-b border-zinc-100 mb-5">
-            <h2 className="text-base font-bold text-zinc-900">Record New Expense</h2>
+            <h2 className="text-base font-bold text-zinc-900">
+              Record New Expense
+            </h2>
             <button
               onClick={() => setShowAddForm(false)}
               className="text-zinc-400 hover:text-zinc-600"
@@ -256,8 +308,8 @@ export function ExpensesList() {
 
           <form
             onSubmit={(e) => {
-              e.preventDefault()
-              addMutation.mutate()
+              e.preventDefault();
+              addMutation.mutate();
             }}
             className="space-y-4"
           >
@@ -316,6 +368,25 @@ export function ExpensesList() {
               </div>
             </div>
 
+            {branches.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="branch">Branch (Optional)</Label>
+                <select
+                  id="branch"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-zinc-200 bg-white text-sm font-medium text-zinc-800 focus:outline-hidden"
+                >
+                  <option value="">Default (My Branch)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.branch_name}>
+                      {b.branch_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="note">Note / Reference (Optional)</Label>
               <Input
@@ -357,8 +428,12 @@ export function ExpensesList() {
         <div className="bg-amber-50/50 rounded-2xl border border-amber-200 p-6 shadow-sm">
           <div className="flex items-center justify-between pb-4 border-b border-amber-200/60 mb-5">
             <div>
-              <h2 className="text-base font-bold text-zinc-900">Edit Expense</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Modify expense details and records</p>
+              <h2 className="text-base font-bold text-zinc-900">
+                Edit Expense
+              </h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Modify expense details and records
+              </p>
             </div>
             <button
               onClick={() => setEditingExpense(null)}
@@ -370,8 +445,8 @@ export function ExpensesList() {
 
           <form
             onSubmit={(e) => {
-              e.preventDefault()
-              editMutation.mutate()
+              e.preventDefault();
+              editMutation.mutate();
             }}
             className="space-y-4"
           >
@@ -428,6 +503,25 @@ export function ExpensesList() {
               </div>
             </div>
 
+            {branches.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-branch">Branch (Optional)</Label>
+                <select
+                  id="edit-branch"
+                  value={editBranchName}
+                  onChange={(e) => setEditBranchName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-zinc-200 bg-white text-sm font-medium text-zinc-800 focus:outline-hidden"
+                >
+                  <option value="">Default (My Branch)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.branch_name}>
+                      {b.branch_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="edit-note">Note / Reference (Optional)</Label>
               <Input
@@ -447,7 +541,9 @@ export function ExpensesList() {
               </Button>
               <Button
                 type="submit"
-                disabled={editMutation.isPending || !editTitle.trim() || !editAmount}
+                disabled={
+                  editMutation.isPending || !editTitle.trim() || !editAmount
+                }
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
                 {editMutation.isPending ? (
@@ -476,19 +572,43 @@ export function ExpensesList() {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">Category:</span>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 focus:outline-hidden"
-          >
-            <option value="all">All Categories</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+          {branches.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">
+                Branch:
+              </span>
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="h-9 px-3 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 focus:outline-hidden"
+              >
+                <option value="all">All Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.branch_name}>
+                    {b.branch_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-zinc-500 font-medium whitespace-nowrap">
+              Category:
+            </span>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 focus:outline-hidden"
+            >
+              <option value="all">All Categories</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -509,7 +629,9 @@ export function ExpensesList() {
             <div className="h-12 w-12 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-400 mb-3">
               <Wallet className="h-6 w-6" />
             </div>
-            <p className="text-sm font-semibold text-zinc-800">No expenses found</p>
+            <p className="text-sm font-semibold text-zinc-800">
+              No expenses found
+            </p>
             <p className="text-xs text-zinc-500 mt-1 max-w-sm">
               {searchQuery || selectedCategory !== "all"
                 ? "Try changing your search or category filter."
@@ -530,19 +652,36 @@ export function ExpensesList() {
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {filteredExpenses.map((exp) => {
-                  const badgeClass = CATEGORY_COLORS[exp.category] || CATEGORY_COLORS.Other
-                  const displayDate = new Date(exp.date || exp.created_at).toLocaleDateString("en-GB", {
+                  const badgeClass =
+                    CATEGORY_COLORS[exp.category] || CATEGORY_COLORS.Other;
+                  const displayDate = new Date(
+                    exp.date || exp.created_at,
+                  ).toLocaleDateString("en-GB", {
                     day: "numeric",
                     month: "short",
                     year: "numeric",
-                  })
+                  });
 
                   return (
-                    <tr key={exp.id} className="hover:bg-zinc-50/50 transition-colors">
+                    <tr
+                      key={exp.id}
+                      className="hover:bg-zinc-50/50 transition-colors"
+                    >
                       <td className="py-3 px-4">
-                        <p className="font-medium text-zinc-900">{exp.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-zinc-900">
+                            {exp.title}
+                          </p>
+                          {exp.branch_name && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-600 border border-zinc-200">
+                              {exp.branch_name}
+                            </span>
+                          )}
+                        </div>
                         {exp.note && (
-                          <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">{exp.note}</p>
+                          <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
+                            {exp.note}
+                          </p>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -561,7 +700,11 @@ export function ExpensesList() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-right font-semibold text-zinc-900 whitespace-nowrap">
-                        GH₵ {exp.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        GH₵{" "}
+                        {exp.amount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         {deletingId === exp.id ? (
@@ -608,7 +751,7 @@ export function ExpensesList() {
                         )}
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -616,5 +759,5 @@ export function ExpensesList() {
         )}
       </div>
     </div>
-  )
+  );
 }
