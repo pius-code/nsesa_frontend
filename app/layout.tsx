@@ -12,7 +12,7 @@ const bodyFont = Inter({
 const headingFont = Plus_Jakarta_Sans({
   variable: "--font-heading",
   subsets: ["latin"],
-  weight: ["600", "700", "800"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +26,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${bodyFont.variable} ${headingFont.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${bodyFont.variable} ${headingFont.variable} h-full antialiased`}
+    >
       <body className="h-full overflow-hidden font-sans bg-zinc-50 text-zinc-900">
         <Providers>{children}</Providers>
         <Toaster
@@ -39,8 +42,7 @@ export default function RootLayout({
                 "backdrop-blur-md !bg-white/95 !border !border-zinc-200 !shadow-lg !rounded-xl !font-sans !pr-10",
               success:
                 "!bg-emerald-50/95 !border-emerald-200 !text-emerald-950",
-              error:
-                "!bg-rose-50/95 !border-rose-200 !text-rose-950",
+              error: "!bg-rose-50/95 !border-rose-200 !text-rose-950",
               title: "!text-sm !font-semibold",
               description: "!text-xs !opacity-75",
               closeButton:
